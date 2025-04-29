@@ -88,6 +88,27 @@ This 2D simulation is designed for:
 
 ---
 
+## Player Status Table
+
+The player status table provides real-time information about each player's current state and attributes. The table includes the following columns:
+
+| **Column**         | **Description**                                                                 |
+|---------------------|---------------------------------------------------------------------------------|
+| **Team**           | The team the player belongs to (e.g., Red or Blue).                             |
+| **Role**           | The player's assigned role (e.g., Left Forward, Center Back).                   |
+| **Hand**           | Indicates whether the player is left-handed or right-handed.                   |
+| **Depth**          | The player's current depth (e.g., Surface, Midwater, Bottom).                  |
+| **Strategy**       | The player's current strategy (e.g., Defend, Attack, Support).                 |
+| **State**          | The player's current state (e.g., Surfacing, Diving, Chasing Puck).            |
+| **Breath (s)**     | The player's remaining breath time in seconds.                                 |
+| **Max Breath (s)** | The player's maximum breath capacity in seconds.                               |
+| **Speed**          | The player's current speed.                                                    |
+| **Flick Str**      | The player's flick strength, which determines the power of their puck flicks.  |
+
+This table is dynamically updated during the simulation and provides a detailed overview of each player's performance and status.
+
+---
+
 ## AI Heuristics
 
 ### General Principles & Priorities
