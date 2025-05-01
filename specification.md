@@ -145,6 +145,7 @@ This table is dynamically updated during the simulation and provides a detailed 
 - Depth is 3 meters; the time it takes to surface or dive takes into account the vertical diving or surfacing speed
 - Breath holds while moving are generally between 10s and 20s, maximum 30s when relatively static
 - left-handedness, a trait possessed by only 10 percent of the population, while the other 90 percent is right-handed. distribute left and right to be random but statistically correct.
+- Flick distance is between 0.5 and rarely 3m, but more generally 1-2 meters
 
 ---
 
@@ -267,6 +268,20 @@ If the opposing team has the puck, then guidelines are drawn for optimal placeme
 - The intersection between a line guideline and a position guideline is where the corresponding player goal to optimally position themselves is
   - example : where the red forward guideline intersects the red left guideline is where player 1 of the red team will try to move to to ideally position themselves
 - Guidelines are suggested relative to the player who has puck.
+
+### Realistc movements
+
+Allow players to keep moving even after reaching their designated position (add some “jitter” or “patrolling” around their guideline target).
+Make sure players with the puck keep moving forward, not just stop at their target.
+Encourage players to dive again as soon as their breath is recovered and there’s a reason to act (e.g., puck is loose, or a teammate needs support).
+Add a small random offset or “wander” to target positions so players don’t stack up.
+Ensure the puck is always being pushed or flicked, not just held indefinitely.
+I will update the AI logic to:
+
+Make players with the puck always try to advance toward the opponent’s goal.
+Make players without the puck “patrol” or “orbit” around their guideline target, not just stop.
+Add a small random offset to each player’s target to avoid clustering.
+Make players more eager to dive and chase the puck or support teammates.
 
 ### Field Orientation and On-Screen Labels
 

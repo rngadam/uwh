@@ -784,16 +784,57 @@
                 if (p.z >= 1) { p.z = 1; p.depthState = 'surface'; }
                 else if (p.z > 0.2) p.depthState = 'midwater';
             }
-            // Simple AI: go to guideline or chase puck if close
-            let dx = puck.x - p.x;
-            let dy = puck.y - p.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            if (!p.hasPuck && p.state === 'ready' && p.depthState === 'bottom' && dist < 5) {
-                p.targetX = puck.x;
-                p.targetY = puck.y;
-                p.strategy = 'chasing';
+            // --- Improved AI for fluidity ---
+            // Add a small random offset to avoid clustering
+            if (!p._wanderAngle) p._wanderAngle = Math.random() * Math.PI * 2;
+            p._wanderAngle += (Math.random() - 0.5) * 0.1;
+            const wanderRadius = 0.5 + Math.random() * 0.2;
+            const wanderX = Math.cos(p._wanderAngle) * wanderRadius;
+            const wanderY = Math.sin(p._wanderAngle) * wanderRadius;
+            // --- Puck Possession ---
+            if (p.hasPuck && p.depthState === 'bottom') {
+                // Always try to move toward opponent's goal
+                const goalX = p.team === 'red' ? POOL_LENGTH_M - 0.5 : 0.5;
+                const goalY = POOL_WIDTH_M / 2 + wanderY;
+                p.targetX = goalX;
+                p.targetY = goalY;
+                p.strategy = 'attacking';
+                // Occasionally flick/push puck
+                if (Math.random() < 0.08) {
+                    const pushStrength = p.flickStrength * (0.5 + Math.random());
+                    const pushAngle = Math.atan2(goalY - p.y, goalX - p.x) + (Math.random() - 0.5) * 0.2;
+                    puck.vx = Math.cos(pushAngle) * pushStrength;
+                    puck.vy = Math.sin(pushAngle) * pushStrength;
+                    puck.owner = null;
+                    p.hasPuck = false;
+                    p.state = 'chasing';
+                }
+            } else if (!p.hasPuck && p.state === 'ready' && p.depthState === 'bottom') {
+                // Chase puck if close, else patrol around guideline
+                let dx = puck.x - p.x;
+                let dy = puck.y - p.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 5) {
+                    p.targetX = puck.x + wanderX;
+                    p.targetY = puck.y + wanderY;
+                    p.strategy = 'chasing';
+                } else {
+                    // Go to guideline position + wander
+                    const g = guidelines[p.team];
+                    let targetX_Ratio, targetY_Ratio;
+                    if (p.role.includes('L')) targetY_Ratio = g.L;
+                    else if (p.role.includes('R')) targetY_Ratio = g.R;
+                    else targetY_Ratio = g.C;
+                    if (p.role.includes('F')) targetX_Ratio = g.F;
+                    else if (p.role.includes('B')) targetX_Ratio = g.B;
+                    else if (g.M !== undefined && p.role.includes('M')) targetX_Ratio = g.M;
+                    else targetX_Ratio = (g.F + g.B) / 2;
+                    p.targetX = targetX_Ratio * POOL_LENGTH_M + wanderX;
+                    p.targetY = targetY_Ratio * POOL_WIDTH_M + wanderY;
+                    p.strategy = 'patrolling';
+                }
             } else if (p.state === 'ready') {
-                // Go to guideline position
+                // Surface players: patrol on surface, eager to dive if breath is full
                 const g = guidelines[p.team];
                 let targetX_Ratio, targetY_Ratio;
                 if (p.role.includes('L')) targetY_Ratio = g.L;
@@ -803,20 +844,25 @@
                 else if (p.role.includes('B')) targetX_Ratio = g.B;
                 else if (g.M !== undefined && p.role.includes('M')) targetX_Ratio = g.M;
                 else targetX_Ratio = (g.F + g.B) / 2;
-                p.targetX = targetX_Ratio * POOL_LENGTH_M;
-                p.targetY = targetY_Ratio * POOL_WIDTH_M;
-                p.strategy = 'positioning';
+                p.targetX = targetX_Ratio * POOL_LENGTH_M + wanderX;
+                p.targetY = targetY_Ratio * POOL_WIDTH_M + wanderY;
+                p.strategy = 'patrolling';
+                // Eager to dive if breath is full and puck is not at surface
+                if (p.currentBreath >= p.maxBreath - 0.1 && puck.z < 0.5 && Math.random() < 0.1) {
+                    p.state = 'diving';
+                    p.strategy = 'diving';
+                }
             }
             // Move towards target
-            dx = p.targetX - p.x;
-            dy = p.targetY - p.y;
-            dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist > 0.1) {
+            let dx = p.targetX - p.x;
+            let dy = p.targetY - p.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 0.05) {
                 const moveSpeed = p.speed * deltaTime;
                 p.x += (dx / dist) * moveSpeed;
                 p.y += (dy / dist) * moveSpeed;
             }
-            // Puck interaction
+            // --- Puck interaction ---
             if (p.depthState === 'bottom' && p.state !== 'surfacing' && p.state !== 'diving') {
                 const puckDist = Math.sqrt(Math.pow(p.x - puck.x, 2) + Math.pow(p.y - puck.y, 2));
                 const interactionDist = PLAYER_STICK_LENGTH + PUCK_RADIUS_M + 0.1;
@@ -826,17 +872,6 @@
                     puck.vx = 0;
                     puck.vy = 0;
                     p.state = 'holding';
-                } else if (p.hasPuck) {
-                    // Occasionally push puck forward
-                    if (Math.random() < 0.02) {
-                        const pushStrength = 3;
-                        const pushAngle = (p.team === 'red') ? 0 : Math.PI;
-                        puck.vx = Math.cos(pushAngle) * pushStrength;
-                        puck.vy = Math.sin(pushAngle) * pushStrength;
-                        puck.owner = null;
-                        p.hasPuck = false;
-                        p.state = 'chasing';
-                    }
                 }
             }
         });
