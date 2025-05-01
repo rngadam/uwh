@@ -25,6 +25,7 @@ Sophisticated HTML5 (Javascript, HTML and CSS and 2d library) that adapts the vi
 ## Screen Layout
 ¨¨
 - Layout should be scoreboard and game timer at the top and selected team formation
+- as team formation can be different for either team, indicate formation for each team
 - pool (game area) at the center
 - Status table at the bottom.
 - game should start on load
@@ -57,9 +58,11 @@ In underwater hockey, the walls are differentiated primarily by their function a
 
 ### 2. **Player Representation**
 - **Stick Figures:** Players are represented as stick figures with:
-  - Legs (lines), body (rectangle), head (circle), arms (lines), and a handheld stick (line orthogonal to the arm tip).
-  - As they are swimming, players are laying flat, head first.
-  - dominant arm extended, stick in front of the head, other arm on the side
+  - Legs (lines), body (rectangle), head (circle), arms (lines), and a handheld stick
+  - the handheld stick is a line orthogonal to the arm tip
+  - As they are swimming: players are laying flat, starting head first towards the opponent goals.
+  - As they move, their stick figure should be rotated in the direction they are going
+  - Dominant arm (left or right) is extended, other arm on the side
 - **Team Colors:**
   - **Red Team:** Originally White.
   - **Blue Team:** Originally Black.
@@ -128,11 +131,19 @@ The player status table provides real-time information about each player's curre
 | **Strategy**       | The player's current strategy (e.g., Defend, Attack, Support).                 |
 | **State**          | The player's current state (e.g., Surfacing, Diving, Chasing Puck).            |
 | **Breath (s)**     | The player's remaining breath time in seconds.                                 |
-| **Max Breath (s)** | The player's maximum breath capacity in seconds.                               |
+| **Max Breath (s)** | The player's maximum breath capacity in seconds.                                |
 | **Speed**          | The player's current speed.                                                    |
 | **Flick Str**      | The player's flick strength, which determines the power of their puck flicks.  |
 
 This table is dynamically updated during the simulation and provides a detailed overview of each player's performance and status.
+
+---
+
+## Value range
+
+- Depth is 3 meters; the time it takes to surface or dive takes into account the vertical diving or surfacing speed
+- Breath holds while moving are generally between 10s and 20s, maximum 30s when relatively static
+- left-handedness, a trait possessed by only 10 percent of the population, while the other 90 percent is right-handed. distribute left and right to be random but statistically correct.
 
 ---
 
@@ -152,7 +163,7 @@ This table is dynamically updated during the simulation and provides a detailed 
 - Formations are based on 6 players in the water simultaneously. Players are numbered from 1 to 6 and left-most forward player to right-most back player
 - 6 players can be organized as :
   - 3-3: 3 forwards, 3 backs
-    - This is a common formation in underwater hockey, with three players focused on offense (forwards) and three on defense (backs).
+    - This is a common formation in underwater hockey, with three players focused on offense (forwards) and three on defense (backs).¨
   - 3-2-1 (3 forwards, 2 midfielders and one full back)
     - This formation includes three forwards, two midfielders who can play both offensively and defensively, and one back.
   - 2-2-2 (2 forwards, 2 midfielders and 2 backs)
@@ -169,9 +180,11 @@ This table is dynamically updated during the simulation and provides a detailed 
 
 ---
 
-### Surface Behavior
+### Player Behavior
 
-- While on the surface, players breathe and move into position for the next dive.
+- While on the surface, players breathe
+- While surfacing or at the surface, players move into position for the next dive
+- While diving or at the bottom, players move to intercept or receive a pass from the puck holder
 - They move towards their ideally designated positions based on the team's formation and opponents formation.
 - Players will consider diving once their breath is fully recovered and they have an opportunity to intercept the puck or receive a pass.
 - Dive decisions are based on the puck's location (diving offensively if the puck is near the opponent's goal or defensively if it's near their own goal) and opponent possession.
