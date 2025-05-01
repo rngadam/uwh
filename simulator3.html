@@ -129,6 +129,7 @@
     let scale = 1;
     let players = [];
     let puck = {};
+    let puckTrail = [];
     let score = { red: 0, blue: 0 };
     let gameTime = 0;
     let timerInterval = null;
@@ -407,17 +408,27 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         players.forEach(player => {
-            // Calculate direction of movement
+            // --- Smooth Rotation ---
             let dx = player.targetX - player.x;
             let dy = player.targetY - player.y;
-            let angle = Math.atan2(dy, dx);
-            if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = player.team === 'red' ? 0 : Math.PI;
+            let desiredAngle = Math.atan2(dy, dx);
+            if (Math.abs(dx) + Math.abs(dy) < 0.01) desiredAngle = player.team === 'red' ? 0 : Math.PI;
+            if (player._angle === undefined) player._angle = desiredAngle;
+            // Limit rotation speed (radians per frame)
+            let delta = desiredAngle - player._angle;
+            // Normalize to [-PI, PI]
+            delta = ((delta + Math.PI) % (2 * Math.PI)) - Math.PI;
+            const maxRot = 0.12; // Lower = slower turning
+            if (Math.abs(delta) > maxRot) delta = Math.sign(delta) * maxRot;
+            player._angle += delta;
+            // Normalize angle
+            player._angle = ((player._angle + Math.PI) % (2 * Math.PI)) - Math.PI;
             const px = metersToPixels(player.x);
             const py = metersToPixels(player.y);
             const size = metersToPixels(0.5);
             ctx.save();
             ctx.translate(px, py);
-            ctx.rotate(angle);
+            ctx.rotate(player._angle);
             ctx.globalAlpha = DEPTH_SHADES[player.depthState] || 1.0;
             // Highlight player with puck
             if (player.hasPuck) {
@@ -493,12 +504,10 @@
         if (puck.owner) {
             const owner = players.find(p => p.id === puck.owner.id);
             if (owner) {
-                // Calculate owner's orientation
                 let dx = owner.targetX - owner.x;
                 let dy = owner.targetY - owner.y;
-                let angle = Math.atan2(dy, dx);
+                let angle = owner._angle !== undefined ? owner._angle : Math.atan2(dy, dx);
                 if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = owner.team === 'red' ? 0 : Math.PI;
-                // Stick tip position (relative to player center)
                 const size = metersToPixels(0.5);
                 let stickTipX, stickTipY;
                 if (owner.hand === 'L') {
@@ -508,7 +517,6 @@
                     stickTipX = size * 0.5;
                     stickTipY = -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH);
                 }
-                // Rotate stick tip to world coordinates
                 const cosA = Math.cos(angle);
                 const sinA = Math.sin(angle);
                 const tipX = owner.x + (stickTipX * cosA - stickTipY * sinA) / scale;
@@ -519,16 +527,36 @@
                 puck.owner = null;
             }
         }
-        ctx.globalAlpha = DEPTH_SHADES.bottom;
-        const puckRadiusPx = metersToPixels(PUCK_RADIUS_M);
+        // --- Glow Puck Trail ---
+        puckTrail.push({ x: puckX, y: puckY, t: Date.now() });
+        // Keep only last 20 positions (about 1/3 second at 60fps)
+        while (puckTrail.length > 20) puckTrail.shift();
+        for (let i = 0; i < puckTrail.length; i++) {
+            const alpha = (i + 1) / puckTrail.length * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.arc(metersToPixels(puckTrail[i].x), metersToPixels(puckTrail[i].y), metersToPixels(PUCK_RADIUS_M * 1.5), 0, Math.PI * 2);
+            ctx.fillStyle = '#fff8';
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+        // --- Glow Puck ---
+        ctx.save();
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 24;
         ctx.beginPath();
-        ctx.arc(metersToPixels(puckX), metersToPixels(puckY), puckRadiusPx, 0, Math.PI * 2);
+        ctx.arc(metersToPixels(puckX), metersToPixels(puckY), metersToPixels(PUCK_RADIUS_M * 1.5), 0, Math.PI * 2);
+        ctx.fillStyle = '#fff8';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(metersToPixels(puckX), metersToPixels(puckY), metersToPixels(PUCK_RADIUS_M), 0, Math.PI * 2);
         ctx.fillStyle = PUCK_COLOR;
         ctx.fill();
         ctx.strokeStyle = '#555555';
         ctx.lineWidth = 1;
         ctx.stroke();
-        ctx.globalAlpha = 1.0;
+        ctx.restore();
     }
     function drawGuidelines() {
         const canvas = document.getElementById('gameCanvas');
