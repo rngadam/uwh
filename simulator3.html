@@ -166,7 +166,7 @@
         if (formation === '2-2-2') return ['LF', 'RF', 'LM', 'RM', 'LB', 'RB'];
         return ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
     }
-    function initializeGame() {
+    function initializeGame(resetScore = false) {
         // Pick random formation for each team
         formations.red = pickFormation();
         formations.blue = pickFormation();
@@ -232,7 +232,7 @@
         });
         // Set initial positions and states
         setInitialFormationPositions();
-        score = { red: 0, blue: 0 };
+        if (resetScore) score = { red: 0, blue: 0 };
         gameTime = 0;
         updateScoreboard();
         updateFormationDisplay();
@@ -1000,7 +1000,8 @@
             puckPos.y > goalStartY && puckPos.y < goalEndY
         ) {
             score.blue++;
-            initializeGame();
+            updateScoreboard();
+            initializeGame(false);
         }
         // Blue goal (right)
         else if (
@@ -1008,7 +1009,8 @@
             puckPos.y > goalStartY && puckPos.y < goalEndY
         ) {
             score.red++;
-            initializeGame();
+            updateScoreboard();
+            initializeGame(false);
         }
     }
     function showGameOver() {
@@ -1043,11 +1045,11 @@
     // --- STARTUP ---
     window.addEventListener('DOMContentLoaded', () => {
         resizeCanvas();
-        initializeGame();
+        initializeGame(true);
         window.addEventListener('resize', resizeCanvas);
         document.getElementById('restartBtn').onclick = () => {
             hideGameOver();
-            initializeGame();
+            initializeGame(true);
             gameLoop.lastTime = undefined;
             requestAnimationFrame(gameLoop);
         };
