@@ -441,36 +441,36 @@
                 ctx.strokeStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.fillStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.lineWidth = 2;
-                // Head
+                // Head (at the front, in direction of movement)
                 ctx.beginPath();
                 ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
                 ctx.fill();
-                // Body (rectangle)
-                ctx.fillRect(-size * 0.1, size * 0.2, size * 0.4, size * 0.4);
+                // Body (rectangle, extends backward from head)
+                ctx.fillRect(-size * 0.1, -size * 0.6, size * 0.2, size * 0.6);
                 // Arms
                 ctx.beginPath();
                 if (player.hand === 'L') {
-                    // Left arm extended forward
-                    ctx.moveTo(-size * 0.1, size * 0.25);
-                    ctx.lineTo(-size * 0.5, -size * 0.1);
-                    // Right arm on side
-                    ctx.moveTo(size * 0.1, size * 0.25);
-                    ctx.lineTo(size * 0.3, size * 0.5);
+                    // Left arm extended forward (relative to body, so to the left of head)
+                    ctx.moveTo(-size * 0.1, -size * 0.3);
+                    ctx.lineTo(-size * 0.5, -size * 0.3);
+                    // Right arm on side (right of body)
+                    ctx.moveTo(size * 0.1, -size * 0.3);
+                    ctx.lineTo(size * 0.3, -size * 0.1);
                 } else {
-                    // Right arm extended forward
-                    ctx.moveTo(size * 0.1, size * 0.25);
-                    ctx.lineTo(size * 0.5, -size * 0.1);
-                    // Left arm on side
-                    ctx.moveTo(-size * 0.1, size * 0.25);
-                    ctx.lineTo(-size * 0.3, size * 0.5);
+                    // Right arm extended forward (right of head)
+                    ctx.moveTo(size * 0.1, -size * 0.3);
+                    ctx.lineTo(size * 0.5, -size * 0.3);
+                    // Left arm on side (left of body)
+                    ctx.moveTo(-size * 0.1, -size * 0.3);
+                    ctx.lineTo(-size * 0.3, -size * 0.1);
                 }
                 ctx.stroke();
-                // Legs
+                // Legs (behind the body)
                 ctx.beginPath();
-                ctx.moveTo(-size * 0.1, size * 0.6);
-                ctx.lineTo(-size * 0.3, size * 0.9);
-                ctx.moveTo(size * 0.1, size * 0.6);
-                ctx.lineTo(size * 0.3, size * 0.9);
+                ctx.moveTo(-size * 0.1, 0);
+                ctx.lineTo(-size * 0.3, size * 0.3);
+                ctx.moveTo(size * 0.1, 0);
+                ctx.lineTo(size * 0.3, size * 0.3);
                 ctx.stroke();
                 // Stick (orthogonal to dominant arm tip)
                 ctx.save();
@@ -478,21 +478,21 @@
                 ctx.lineWidth = 3;
                 if (player.hand === 'L') {
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.5, -size * 0.1);
-                    ctx.lineTo(-size * 0.5, -size * 0.1 - metersToPixels(PLAYER_STICK_LENGTH));
+                    ctx.moveTo(-size * 0.5, -size * 0.3);
+                    ctx.lineTo(-size * 0.5, -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH));
                     ctx.stroke();
                 } else {
                     ctx.beginPath();
-                    ctx.moveTo(size * 0.5, -size * 0.1);
-                    ctx.lineTo(size * 0.5, -size * 0.1 - metersToPixels(PLAYER_STICK_LENGTH));
+                    ctx.moveTo(size * 0.5, -size * 0.3);
+                    ctx.lineTo(size * 0.5, -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH));
                     ctx.stroke();
                 }
                 ctx.restore();
-                // Role label
+                // Role label (above the head)
                 ctx.fillStyle = '#FFF';
                 ctx.font = 'bold 10px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(player.role, 0, -size * 0.3);
+                ctx.fillText(player.role, 0, -size * 0.35);
                 if (player.hasPuck) ctx.restore();
                 ctx.restore();
             });

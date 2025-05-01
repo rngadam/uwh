@@ -60,7 +60,7 @@ In underwater hockey, the walls are differentiated primarily by their function a
 - **Stick Figures:** Players are represented as stick figures with:
   - Legs (lines), body (rectangle), head (circle), arms (lines), and a handheld stick
   - the handheld stick is a line orthogonal to the arm tip
-  - As they are swimming: players are laying flat, starting head first towards the opponent goals.
+  - As they are swimming: players are laying flat, oriented head first in the direction they are moving.
   - As they move, their stick figure should be rotated in the direction they are going
   - Dominant arm (left or right) is extended, other arm on the side
 - **Team Colors:**
@@ -265,3 +265,28 @@ If the opposing team has the puck, then guidelines are drawn for optimal placeme
 - The intersection between a line guideline and a position guideline is where the corresponding player goal to optimally position themselves is
   - example : where the red forward guideline intersects the red left guideline is where player 1 of the red team will try to move to to ideally position themselves
 - Guidelines are suggested relative to the player who has puck.
+
+### Field Orientation and On-Screen Labels
+
+The simulation visually labels the pool boundaries and axes to clarify orientation:
+
+Red Wall (Endline): Labeled to the left of the left onscreen edge of the playing area.
+Blue Wall (Endline): Labeled to the right of the right onscreen edge of the playing area.
+Near Wall (Sideline): Labeled above the top onscreen edge of the playing area.
+Far Wall (Sideline): Labeled below the bottom onscreen edge of the playing area.
+Axis Indicators:
+"X →" is labeled outside the onscreen bottom-right pool, pointing right (increasing X).
+"Y ↓" is labeled outside the onscreen bottom-right pool, pointing down (increasing Y).
+
+Corner and Axis Reference Points:
+"X0, Y0" at the onscreen top-left (origin).
+"Xmax" and "Y0" at the onscreen top-right.
+"Ymax" at the onscreen bottom-left.
+"Xmax, Ymax" at the onscreen bottom-right.
+
+Guideline Drawing Orientation:
+
+F/M/B (Forward, Mid, Back) guidelines are drawn as onscreen vertical lines (spanning left to right), parallel to the sidelines.
+L/C/R (Left, Center, Right) guidelines are drawn as onscreen horizontal lines (spanning top to bottom), parallel to the endlines.
+
+These visual aids help clarify the coordinate system and ensure correct feedback on field and guideline orientation.
