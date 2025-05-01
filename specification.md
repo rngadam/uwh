@@ -1,9 +1,34 @@
-# Underwater Hockey 2D Simulation Specification
+# Underwater Hockey 2D Simulation Specification (simulator2.html)
 
 ## Overview
 
 This document outlines the design and implementation of a **2D overhead simulation** of Underwater Hockey. The simulation will provide a simplified, tactical view of the game, focusing on player movement, puck interaction, and goal scoring mechanics.
 
+simulator.html was the first version of the simulator; we're trying to improve on that with a clearer specification to create simulator2.html
+
+---
+
+## Applications
+This 2D simulation is designed for:
+- **Tactical Analysis:** Understanding team formations and strategies.
+- **Educational Use:** Teaching the rules and dynamics of Underwater Hockey.
+- **Entertainment:** Providing a simplified, engaging version of the sport.
+
+---
+
+## implementation
+
+Sophisticated HTML5 (Javascript, HTML and CSS and 2d library) that adapts the visual size of the playing area and the game elements to the available window, dynamically adjusting and is visually appealing with fully implemented AI heuristics, depth shading, dynamic formation guidelines, scoreboard, status, team formations, random but realistic players attributes for max breath, stamina and swimming speed.
+
+---
+
+## Screen Layout
+¨¨
+- Layout should be scoreboard and game timer at the top. Team
+- pool (game area) at the center
+- Status table at the bottom.
+- game should start on load
+- Formation is randomly select for each team (3-3, 3-2-1, 2-2-2, etc)
 ---
 
 ## Features
@@ -25,6 +50,7 @@ In underwater hockey, the walls are differentiated primarily by their function a
 
 #### Goal Areas
 - At each end of the pool, the **goal area** is defined by a solid line near the goal tray.
+- The front and sides of the goal tray are surrounded by a border in the color of the team.
 - A **dotted line** marks the **penalty shot area**, which is a restricted zone near the goal.
 
 ---
@@ -32,6 +58,8 @@ In underwater hockey, the walls are differentiated primarily by their function a
 ### 2. **Player Representation**
 - **Stick Figures:** Players are represented as stick figures with:
   - Legs (lines), body (rectangle), head (circle), arms (lines), and a handheld stick (line orthogonal to the arm tip).
+  - As they are swimming, players are laying flat, head first.
+  - dominant arm extended, stick in front of the head, other arm on the side
 - **Team Colors:**
   - **Red Team:** Originally White.
   - **Blue Team:** Originally Black.
@@ -60,7 +88,10 @@ In underwater hockey, the walls are differentiated primarily by their function a
 - **Player Movement:** Players move as stick figures, with their stick interacting with the puck.
 - **Puck Interaction:**
   - Players can **push** or **flick** the puck using their stick.
-  - The puck must cross the **goal tray lip** to score.
+  - The puck must cross the **goal tray lip** fully to score.
+- Players on the same plane (surface or bottom of the pool) cannot overlap each other
+- Players diving or surfacing can be midwater under a player at the surface or over a player at the bottom
+- Players can stay at different depths
 
 ---
 
@@ -69,6 +100,9 @@ In underwater hockey, the walls are differentiated primarily by their function a
   - The pool is visualized as a **rectangle** with a **meter grid system**.
   - Players are shown as **stick figures** with shading to indicate depth.
   - The puck is a small circle, visually distinct from players.
+  - Goals: are three-meter-long trough at either end of the playing area.
+    - Leading up to the trough is an angled lip
+    - To score, the puck must be fully in the trough (pass the lip)
 - **Depth Visualization:**
   - **Shading Intensity:**
     - **Darkest Shade:** Surface.
@@ -77,14 +111,6 @@ In underwater hockey, the walls are differentiated primarily by their function a
 - **Team and Role Indicators:**
   - **Team Colors:** Red vs. Blue.
   - **Role Labels:** Displayed as text near each player (e.g., LF, RW, CB).
-
----
-
-## Applications
-This 2D simulation is designed for:
-- **Tactical Analysis:** Understanding team formations and strategies.
-- **Educational Use:** Teaching the rules and dynamics of Underwater Hockey.
-- **Entertainment:** Providing a simplified, engaging version of the sport.
 
 ---
 
@@ -113,8 +139,8 @@ This table is dynamically updated during the simulation and provides a detailed 
 
 ### General Principles & Priorities
 
-- **Breath Management:** Staying surfaced to recover breath is the highest priority. Players must surface if their breath gets too low. Players can only dive again when they have fully recovered their breath.
-- **Low Breath Action (Puck Possession):** If a player has the puck underwater and their breath is getting low, they will attempt to move the puck towards the opponent's goal before surfacing.
+- **Breath Management:** Staying surfaced to recover breath is required. Players must surface if their breath gets too low. Players can only dive again when they have fully recovered their breath. Breath recovery is twice as fast as the breath hold but is constrained by stamina.
+- **Low Breath Action (Puck Possession):** If a player has the puck underwater and their breath is getting low, they will attempt to pass the puck to one of their team mate.
 
 ---
 
@@ -122,24 +148,31 @@ This table is dynamically updated during the simulation and provides a detailed 
 
 - Players are assigned positions based on standard team formations at the start of the game.
 - Within each team, the strongest forward and back players are typically assigned the central positions in their respective lines.
+- Formations are based on 6 players in the water simultaneously. Players are numbered from 1 to 6 and left-most forward player to right-most back player
+- 6 players can be organized as :
+  - 3-3: 3 forwards, 3 backs
+    - This is a common formation in underwater hockey, with three players focused on offense (forwards) and three on defense (backs).
+  - 3-2-1 (3 forwards, 2 midfielders and one full back)
+    - This formation includes three forwards, two midfielders who can play both offensively and defensively, and one back.
+  - 2-2-2 (2 forwards, 2 midfielders and 2 backs)
+    - This formation has an even distribution of players, with two players in each of the three positions: forwards, midfielders, and backs.
 
 ---
 
 ### Game Start Logic
 
-- Players start at their end walls, arranged by their assigned roles.
+- Players start at their end walls, arranged by forwards in the middle (over the goal), midfielders on either side and backs on either side of the midfielders.
 - Forwards dive immediately when the game starts and race towards the puck at the center.
-- Backs initially remain on the surface and follow their corresponding forwards.
-- Forwards commit to the race until they are close to the puck or it moves significantly.
-- Backs continue following until their forward dives or the game situation changes.
+- Backs initially remain on the surface and follow their corresponding forwards until forwards from either or both teams are close to the puck.
+- Forwards commit to the race to the puck to try to get possession of the puck.
 
 ---
 
 ### Surface Behavior
 
-- While on the surface, players prioritize recovering breath.
-- They will also move slowly towards their designated positions based on the team's formation.
-- Players will only consider diving once their breath is fully recovered.
+- While on the surface, players breathe and move into position for the next dive.
+- They move towards their ideally designated positions based on the team's formation and opponents formation.
+- Players will consider diving once their breath is fully recovered and they have an opportunity to intercept the puck or receive a pass.
 - Dive decisions are based on the puck's location (diving offensively if the puck is near the opponent's goal or defensively if it's near their own goal) and opponent possession.
 
 ---
@@ -147,49 +180,74 @@ This table is dynamically updated during the simulation and provides a detailed 
 ### Underwater Behavior
 
 - **Possessing the Puck:**
-  - If in the opponent's half and close enough, the player will attempt a shot on goal.
+  - If in the opponent's half and close to the goal, the player will attempt a shot on goal.
   - If in their own half or near their own goal, the player will attempt to move the puck towards the side wall to clear it from the scoring area.
-  - Otherwise, the player will attempt to advance the puck towards the opponent's goal.
+  - Otherwise, the player will attempt to advance the puck towards the opponent's goal while trying to keep a distance from the opponents.
   - Players with the puck will try to avoid nearby opponents by adjusting their movement angle.
+
 - **Opponent Possessing Puck:**
   - If the puck is near their own goal, all nearby defenders will aggressively pressure the puck carrier.
   - Backs will position themselves between the puck carrier and their own goal to intercept.
-  - Forwards will move towards the puck carrier to apply pressure.
+  - Forwards will move sandwich the puck carrier to apply pressure.
+
 - **Puck is Loose:**
-  - If the loose puck is near their own goal, players prioritize chasing it directly.
-  - Players who are on the opposite side of the pool from the puck may move towards the center or consider surfacing.
-  - Generally, players balance chasing the loose puck with moving towards their assigned formation position. Defensive players prioritize maintaining formation more than forwards.
+
+  - If the loose puck is near their own goal, players prioritize moving it away from the goal.
+  - Generally, players balance chasing the loose puck with moving towards their assigned formation position.
+  - Defensive players prioritize maintaining formation more than forwards.
 
 ---
 
 ## Dynamic Formation Guidelines
 
-### Vertical Guidelines
+- We want to visualize the dynamic nature of the formations across the game area for both teams
+- Formation position depends on
+  - if own team or opponent is controlling the puck
+  - how close to own goal or opponent goal we are
+  - which players are at the bottom and which players are at the surface
+- two sets of guidelines: one for red team, one for blue team.
 
-- Replace vertical lines with **dotted guidelines** in the color of the team in possession.
-- These guidelines represent forward, mid, and back roles.
-- The guidelines adjust dynamically based on the puck's position and the team in possession.
-- Label the guidelines as "F" (Forward), "M" (Mid), and "B" (Back).
+### Lines Guidelines
+
+- These guidelines represent forward, optionally mid (2-2-2, 3-2-1, 2-3-1 all have midfielders), and back lines.
+- These guidelines connect from one sidelines to the otehr
+- The guidelines, adjust dynamically based on the puck's position and the team in possession.
+- Labeled guidelines as "F" (Forward), "M" (Mid), and "B" (Back). Labels appear in the team color;
+  - one team labels is on the near sideline, the other team labels is on the far sidelines
 
 ---
 
-### Horizontal Guidelines
+### Position Guidelines
 
-- Replace horizontal lines with **dotted guidelines** in the color of the team in possession.
-- If the puck is on the left wall, the left guideline should be parallel to the wall, and the right guideline should be two meters to the right.
+- These guidelines represent forward, optionally center (3-3 or 3-2-1 or 2-3-1 formations all have a center position), and backs left, center or right
+- If the puck is on the near sideline, the left position guideline is closely parallel to the near sideline
+  - and the right guideline should be two meters to the right.
 - Maintain a constant distance between all guidelines to guide player positioning.
 
 ---
 
-### Persistent Guidelines
+### Drawing Guidelines
 
-- Keep the dotted guidelines visible even when no team has possession of the puck, using their last known positions.
-- Use a neutral color (e.g., gray) for the guidelines when no team has possession.
+- Keep the dotted guidelines visible even when no team has possession of the puck, using their target positions.
+- Lines guidelines should be parallel to the end walls and position guidelines should be parallel to the sidelines. Both position and line guidelines are labeled. labeled appear outside the game area and follow the guidelines they label.
+- left, center, right should be parallel to sidelines (near and far wall). labels are outside the endlines.
+- forward, mid, back guidelines are parallel to the endlines labels are outside the sidelines.
 
 ---
 
-### Test the Changes
+### How the guidelines update dynamically
 
-1. Start the simulation and observe the horizontal lines (`L` and `R`).
-2. Verify that the lines adjust dynamically based on the puck's position when a team has possession.
-3. Confirm that the lines remain visible and retain their last positions when no one has the puck.
+Guidelines represent tight formation moving across the playing area. They update according to the game dynamic.
+
+Guidelines are equidistant by about a body length and relative to whichever player holds the puck and their own position.
+
+For example, if the forward left has the puck, then the left guideline and forward guideline intersects on where the forward left is so that other players can know what their target position is when surfacing.
+
+If the opposing team has the puck, then guidelines are drawn for optimal placement for defense around the opposing player holding the puck.
+
+
+### AI used
+
+- The intersection between a line guideline and a position guideline is where the corresponding player goal to optimally position themselves is
+  - example : where the red forward guideline intersects the red left guideline is where player 1 of the red team will try to move to to ideally position themselves
+- Guidelines are suggested relative to the player who has puck.

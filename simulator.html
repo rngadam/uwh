@@ -156,6 +156,8 @@
         const BREATH_RECOVERY_RATE_PER_SEC = 3; // Breath units recovered per second on surface
         const GAME_HALF_TIME_SECONDS = 5 * 60;
         const FRAMES_PER_SECOND = 60; // Target FPS
+        const FORMATION_LINE_SPACING = 40; // Approx 2 meters if field width is ~25m (adjust as needed)
+        const PUCK_INFLUENCE_ON_LINES = 0.5; // How much puck position shifts the lines (0 to 1)
 
         // Calculated constants based on FPS
         let BASE_BREATH_TIME = BASE_BREATH_TIME_SECONDS * FRAMES_PER_SECOND;
@@ -272,6 +274,74 @@
             console.log("Kickoff!");
         }
 
+        // --- Helper Function for Drawing (Moved Earlier) ---
+        function calculateDynamicLineX(baseRole, teamColor, possessingTeam) {
+            // Only calculate if it's the possessing team's line
+            if (teamColor !== possessingTeam) {
+                return null; // Don't calculate/draw for non-possessing team
+            }
+
+            // Find the puck carrier on the possessing team (if any)
+            let puckCarrier = null;
+            if (possessingTeam) {
+                puckCarrier = teams[possessingTeam].find(p => p.hasPuck);
+            }
+
+            // Calculate a center point influenced by the puck's position
+            const centerBias = (puck.x - FIELD_WIDTH / 2) * PUCK_INFLUENCE_ON_LINES;
+            let dynamicCenter = FIELD_WIDTH / 2 + centerBias;
+
+            // Stronger influence if a teammate has the puck
+            let carrierInfluence = 0;
+            if (puckCarrier) {
+                // If the carrier's role matches the line role, pull the line strongly
+                if (puckCarrier.role.includes(baseRole)) {
+                     carrierInfluence = (puckCarrier.x - dynamicCenter) * 0.8; // Strong pull
+                } else {
+                     carrierInfluence = (puckCarrier.x - dynamicCenter) * 0.3; // Weaker pull for other lines
+                }
+                dynamicCenter += carrierInfluence;
+            }
+
+
+            let lineX;
+            const spacing = FORMATION_LINE_SPACING; // Approx 2m
+
+            // Determine line position relative to dynamic center
+            if (teamColor === 'black') { // Attacking right
+                if (baseRole === 'Forward') lineX = dynamicCenter + spacing;
+                else if (baseRole === 'Back') lineX = dynamicCenter - spacing;
+                else lineX = dynamicCenter;
+            } else { // White, attacking left
+                if (baseRole === 'Forward') lineX = dynamicCenter - spacing;
+                else if (baseRole === 'Back') lineX = dynamicCenter + spacing;
+                else lineX = dynamicCenter;
+            }
+
+            // Clamp line position, allowing Forward line to reach goal area
+            const buffer = PLAYER_RADIUS; // Reduced buffer
+            const goalBuffer = GOAL_DEPTH + PLAYER_RADIUS;
+            if (baseRole === 'Forward') {
+                 // Allow forward line to go almost into the goal
+                 lineX = Math.max(goalBuffer, Math.min(FIELD_WIDTH - goalBuffer, lineX));
+            } else {
+                 // Keep Mid/Back lines further out
+                 lineX = Math.max(buffer * 3, Math.min(FIELD_WIDTH - buffer * 3, lineX));
+            }
+
+            return lineX;
+        }
+
+        function getPuckPossessorTeam() {
+            for (const player of teams.black) {
+                if (player.hasPuck) return 'black';
+            }
+            for (const player of teams.white) {
+                if (player.hasPuck) return 'white';
+            }
+            return null; // Puck is loose
+        }
+
         // --- Drawing ---
         function drawField() {
             // Pool bottom
@@ -280,23 +350,66 @@
 
             // Goals
             ctx.fillStyle = '#FFA500';
-            // Use current FIELD_HEIGHT and calculated GOAL_WIDTH
             ctx.fillRect(0, (FIELD_HEIGHT - GOAL_WIDTH) / 2, GOAL_DEPTH, GOAL_WIDTH);
             ctx.fillRect(FIELD_WIDTH - GOAL_DEPTH, (FIELD_HEIGHT - GOAL_WIDTH) / 2, GOAL_DEPTH, GOAL_WIDTH);
 
-            // Center line
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(FIELD_WIDTH / 2, 0);
-            ctx.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT);
-            ctx.stroke();
+            // --- Draw Dynamic Formation Lines ---
+            const possessingTeam = getPuckPossessorTeam(); // Check who has the puck
 
-            // Center circle
+            // Keep track of the last known positions of the lines
+            if (!window.lastLeftLineY) window.lastLeftLineY = FIELD_HEIGHT / 4;
+            if (!window.lastRightLineY) window.lastRightLineY = (FIELD_HEIGHT * 3) / 4;
+
+            if (possessingTeam) {
+                // Adjust the horizontal lines based on puck position
+                const puckOnLeft = puck.x < FIELD_WIDTH / 2; // Determine if puck is on the left side
+                window.lastLeftLineY = puckOnLeft ? puck.y : puck.y - FORMATION_LINE_SPACING;
+                window.lastRightLineY = window.lastLeftLineY + FORMATION_LINE_SPACING;
+            }
+
+            ctx.save();
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+
+            const teamColorStyle = possessingTeam === 'black' ? 'rgba(200, 200, 200, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+            ctx.strokeStyle = teamColorStyle;
+            ctx.fillStyle = teamColorStyle;
+
+            // Vertical F/M/B Lines
+            ['Forward', 'Mid', 'Back'].forEach(role => {
+                const lineX = calculateDynamicLineX(role, possessingTeam, possessingTeam);
+                if (lineX !== null) {
+                    ctx.beginPath();
+                    ctx.moveTo(lineX, 0);
+                    ctx.lineTo(lineX, FIELD_HEIGHT);
+                    ctx.stroke();
+                    // Add Label (F, M, B)
+                    const label = role.substring(0, 1);
+                    ctx.fillText(label, lineX, 10); // Label near top edge
+                }
+            });
+
+            // --- Horizontal Left/Right Lines ---
+            const leftLineY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, window.lastLeftLineY));
+            const rightLineY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, window.lastRightLineY));
+
+            // Draw Left Line
             ctx.beginPath();
-            // Make circle radius relative? e.g., FIELD_HEIGHT * 0.06
-            ctx.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, FIELD_HEIGHT * 0.06, 0, Math.PI * 2);
+            ctx.moveTo(0, leftLineY);
+            ctx.lineTo(FIELD_WIDTH, leftLineY);
             ctx.stroke();
+            ctx.fillText('L', 10, leftLineY - 5); // Label near left edge
+
+            // Draw Right Line
+            ctx.beginPath();
+            ctx.moveTo(0, rightLineY);
+            ctx.lineTo(FIELD_WIDTH, rightLineY);
+            ctx.stroke();
+            ctx.fillText('R', 10, rightLineY + 15); // Label near left edge
+
+            ctx.restore();
         }
 
         function drawPuck() {
@@ -404,7 +517,7 @@
             checkGoal();
         }
 
-        function updatePlayers() {
+        function updatePlayers(framesElapsed) { // Accept framesElapsed
              if (gamePaused && gameState !== 'Kickoff') return;
              const allPlayers = [...teams.black, ...teams.white];
 
@@ -412,8 +525,8 @@
                 let isUnderwater = !player.isOnSurface && player.state !== 'Surfacing';
 
                 // --- Breath & Stamina ---
-                if (isUnderwater) { // Underwater and not actively surfacing
-                    player.breath -= 1;
+                if (isUnderwater) {
+                    player.breath -= framesElapsed; // Use framesElapsed for drain
                     if (player.breath <= 0) {
                         // Heuristic: Low Breath Action (Puck Possession)
                         if (player.hasPuck) {
@@ -424,29 +537,34 @@
                             puck.dy += Math.sin(angleToGoal) * PUSH_FORCE * 2;
                             player.hasPuck = false;
                         }
-                        // Force Surfacing state
                         player.state = 'Surfacing';
                         player.breath = 0;
-                        // Don't zero dx/dy here, allow movement during surfacing
                     }
                     // Drain stamina based on speed
                     const currentSpeed = Math.sqrt(player.dx * player.dx + player.dy * player.dy);
-                    if (currentSpeed > player.speed * 0.5) player.stamina -= STAMINA_DRAIN;
-                    else player.stamina += STAMINA_RECOVERY;
+                    if (currentSpeed > player.speed * 0.5) player.stamina -= STAMINA_DRAIN * framesElapsed; // Scale drain by frames
+                    else player.stamina += STAMINA_RECOVERY * framesElapsed; // Scale recovery by frames
                     player.stamina = Math.max(0, Math.min(STAMINA_MAX, player.stamina));
 
-                } else { // Recovering breath (either surfacing or waiting on surface)
-                    // No dx/dy zeroing here if surfacing, allow movement
-                    player.breath += BREATH_RECOVERY_RATE;
+                } else { // Recovering breath (Surfacing or OnSurface)
+                    // *** Use framesElapsed for recovery ***
+                    player.breath += BREATH_RECOVERY_RATE_PER_SEC * (FRAMES_PER_SECOND / 1000) * (framesElapsed * (1000 / FRAMES_PER_SECOND)); // Recover based on seconds elapsed
+                    // Simplified: player.breath += BREATH_RECOVERY_RATE_PER_SEC * framesElapsed / FRAMES_PER_SECOND; // Breath units per second * seconds elapsed
+                    // Let's use the direct rate per frame calculation adjusted by elapsed frames
+                    player.breath += BREATH_RECOVERY_RATE * framesElapsed;
+
+
                     if (player.breath >= player.maxBreath) {
                         player.breath = player.maxBreath;
                         if (player.state === 'Surfacing') {
                             player.state = 'OnSurface'; // Transition to waiting on surface
+                            player.isOnSurface = true; // Ensure flag is set AFTER state change potentially
                         }
-                        player.isOnSurface = true; // Ensure flag is set
+                        // Ensure isOnSurface is true if breath is full, even if state wasn't Surfacing
+                        player.isOnSurface = true;
                     }
                     // Stamina recovers faster on surface/surfacing
-                    player.stamina += STAMINA_RECOVERY * 1.5; // Slightly less than full surface recovery if still surfacing
+                    player.stamina += STAMINA_RECOVERY * 1.5 * framesElapsed; // Scale recovery by frames
                     player.stamina = Math.max(0, Math.min(STAMINA_MAX, player.stamina));
                 }
 
@@ -555,14 +673,16 @@
 
             if (distPuckStick < PUCK_RADIUS + STICK_WIDTH) { // Stick is touching puck
                 player.hasPuck = true;
-                const pushAngle = player.angle; // Push in the direction the stick is facing
+                const pushAngle = player.angle;
 
                 // Apply force based on state
                 let force = PUSH_FORCE;
-                if (player.state === 'Flicking' && (Date.now() - player.lastActionTime > 500)) { // Flick cooldown
+                // *** CRITICAL: Use 'Shooting' state for flick force ***
+                if (player.state === 'Shooting') {
                     force = FLICK_FORCE;
-                    player.lastActionTime = Date.now();
-                    player.state = player.role === 'Forward' ? 'Attacking' : 'Defending'; // Revert state after flick
+                    // Optional: Add cooldown logic here if needed later
+                    // player.lastActionTime = performance.now(); // Use performance.now() if using cooldown
+                    // Don't change state immediately after shooting, let AI decide next frame
                 }
 
                 // Apply force considering player's momentum slightly
@@ -572,7 +692,7 @@
                 puck.dx += forceX;
                 puck.dy += forceY;
 
-                // Simple curl effect - slightly nudge puck towards player center if moving slowly
+                // Simple curl effect
                  if (player.state === 'Curling') {
                      const angleToPlayer = Math.atan2(player.y - puck.y, player.x - puck.x);
                      puck.dx += Math.cos(angleToPlayer) * 0.1;
@@ -586,9 +706,13 @@
                 for (let j = i + 1; j < players.length; j++) {
                     const p1 = players[i];
                     const p2 = players[j];
-                    // Optional: Reduce collision impact if one player is on surface?
-                    // const p1Surface = p1.isOnSurface || p1.state === 'Surfacing';
-                    // const p2Surface = p2.isOnSurface || p2.state === 'Surfacing';
+
+                    // Skip collision check if players are at different depths
+                    const p1IsAtSurfaceLevel = p1.isOnSurface || p1.state === 'Surfacing';
+                    const p2IsAtSurfaceLevel = p2.isOnSurface || p2.state === 'Surfacing';
+                    if (p1IsAtSurfaceLevel !== p2IsAtSurfaceLevel) {
+                        continue;
+                    }
 
                     const dx = p2.x - p1.x;
                     const dy = p2.y - p1.y;
@@ -597,15 +721,53 @@
 
                     if (distance < minDist && distance > 0) {
                         const overlap = minDist - distance;
-                        const adjustFactor = 0.4;
-                        const adjustX = (dx / distance) * overlap * adjustFactor;
-                        const adjustY = (dy / distance) * overlap * adjustFactor;
+                        const baseAdjustFactor = 0.4;
+                        const separationX = (dx / distance) * overlap;
+                        const separationY = (dy / distance) * overlap;
 
-                        // Apply separation (Simplified: treat surface/underwater the same for collision separation)
-                        p1.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p1.x - adjustX));
-                        p1.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p1.y - adjustY));
-                        p2.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p2.x + adjustX));
-                        p2.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p2.y + adjustY));
+                        if (p1.color === p2.color) { // Teammate collision
+                            let p1AdjustFactor = baseAdjustFactor;
+                            let p2AdjustFactor = baseAdjustFactor;
+                            let p1TargetReset = false;
+                            let p2TargetReset = false;
+
+                            // *** Increase push-back force for non-carrier ***
+                            const pushBackFactor = 1.5; // Increased from 1.0
+
+                            if (p1.hasPuck && !p2.hasPuck) {
+                                p2AdjustFactor = pushBackFactor; // Push p2 away more forcefully
+                                p1AdjustFactor = 0.1;
+                                p2TargetReset = true;
+                            } else if (p2.hasPuck && !p1.hasPuck) {
+                                p1AdjustFactor = pushBackFactor; // Push p1 away more forcefully
+                                p2AdjustFactor = 0.1;
+                                p1TargetReset = true;
+                            }
+
+                            p1.x -= separationX * p1AdjustFactor;
+                            p1.y -= separationY * p1AdjustFactor;
+                            p2.x += separationX * p2AdjustFactor;
+                            p2.y += separationY * p2AdjustFactor;
+
+                            if (p1TargetReset && p1.state !== 'Surfacing') {
+                                p1.state = 'Positioning'; // Force repositioning
+                            }
+                            if (p2TargetReset && p2.state !== 'Surfacing') {
+                                p2.state = 'Positioning'; // Force repositioning
+                            }
+
+                        } else { // Opponent collision
+                            p1.x -= separationX * baseAdjustFactor;
+                            p1.y -= separationY * baseAdjustFactor;
+                            p2.x += separationX * baseAdjustFactor;
+                            p2.y += separationY * baseAdjustFactor;
+                        }
+
+                        // Clamp positions
+                        p1.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p1.x));
+                        p1.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p1.y));
+                        p2.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p2.x));
+                        p2.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p2.y));
                     }
                 }
             }
@@ -628,22 +790,30 @@
                 return;
             }
 
-            // --- Breath Management ---
-            // Highest priority: If surfacing, do nothing else AI-wise
+            // --- Breath Management & Surfacing Check ---
+            // If surfacing, calculate a reposition target but DO NOT proceed to other AI logic
             if (player.state === 'Surfacing') {
-                player.targetX = player.x; // Stay still while surfacing animation/alpha happens
-                player.targetY = player.y;
-                return;
+                // Allow AI to set a target for slow repositioning during surfacing
+                // Example: Move slowly towards formation position even while surfacing
+                const formationPos = calculateFormationPosition(player, true); // Treat as surface for positioning
+                player.targetX = formationPos.x;
+                player.targetY = formationPos.y;
+                // Crucially, still return to prevent underwater/surface logic execution
+                return; // Surfacing players only reposition slowly, no other AI decisions this frame
             }
 
             // --- Surface Behavior ---
-            if (player.isOnSurface) {
+            // Use 'else if' because Surfacing is handled above and returns
+            else if (player.isOnSurface) {
                 handleSurfaceAI(player);
-                return; // AI logic specific to being on the surface
+                return; // AI logic specific to being on the surface (diving check)
             }
 
             // --- Underwater Behavior ---
-            handleUnderwaterAI(player);
+            // Only executed if not Surfacing and not OnSurface
+            else {
+                 handleUnderwaterAI(player);
+            }
         }
 
         function handleKickoffAI(player) {
@@ -699,15 +869,11 @@
             }
         }
 
-        // --- Correcting Goal Direction Logic ---
-
         function handleUnderwaterAI(player) {
-            // *** CRITICAL: Ensure goal coordinates are correct ***
-            const opponentGoalX = player.color === 'black' ? FIELD_WIDTH : 0; // Black attacks right (Width), White attacks left (0)
-            const ownGoalX = player.color === 'black' ? 0 : FIELD_WIDTH;       // Black defends left (0), White defends right (Width)
-            const goalY = FIELD_HEIGHT / 2; // Goal center Y
+            const opponentGoalX = player.color === 'black' ? FIELD_WIDTH : 0;
+            const ownGoalX = player.color === 'black' ? 0 : FIELD_WIDTH;
+            const goalY = FIELD_HEIGHT / 2;
 
-            // ... (rest of variable calculations: puckDist, ownGoalDist, etc.) ...
             const puckDist = distance(player.x, player.y, puck.x, puck.y);
             const puckDistToOwnGoal = distance(puck.x, puck.y, ownGoalX, goalY);
             const puckDistToOpponentGoal = distance(puck.x, puck.y, opponentGoalX, goalY);
@@ -715,87 +881,110 @@
             const nearestOpponent = findNearestOpponent(player);
             const nearestOpponentDist = nearestOpponent ? distance(player.x, player.y, nearestOpponent.x, nearestOpponent.y) : Infinity;
 
-            let desiredState = player.state;
+            // --- Determine Current Puck Possession ---
+            // Check self first
+            const iHavePuck = player.hasPuck; // Use the flag updated by handlePlayerPuckInteraction
 
-            // Determine if opponent has puck (simplistic: check if any opponent is very close to puck)
+            // Check opponents
             const opponentTeam = player.color === 'black' ? teams.white : teams.black;
             let opponentHasPuck = false;
-            let puckCarrier = null;
+            let puckCarrierOpponent = null;
             for (const opp of opponentTeam) {
-                if (!opp.isOnSurface && distance(opp.x, opp.y, puck.x, puck.y) < PLAYER_RADIUS + PUCK_RADIUS + 5) {
-                     // More robust check: is the opponent's stick near the puck?
+                 // Check if opponent is close AND their stick is likely touching puck
+                 if (!opp.isOnSurface && distance(opp.x, opp.y, puck.x, puck.y) < PLAYER_RADIUS + PUCK_RADIUS + 5) {
                      const oppStickTipX = opp.x + STICK_LENGTH * Math.cos(opp.angle);
                      const oppStickTipY = opp.y + STICK_LENGTH * Math.sin(opp.angle);
-                     if (distance(oppStickTipX, oppStickTipY, puck.x, puck.y) < PUCK_RADIUS + STICK_WIDTH) {
+                     if (distance(oppStickTipX, oppStickTipY, puck.x, puck.y) < PUCK_RADIUS + STICK_WIDTH + 2) { // Slightly tighter check
                          opponentHasPuck = true;
-                         puckCarrier = opp;
+                         puckCarrierOpponent = opp;
                          break;
-                     }
-                }
-            }
-
-            // --- State Transitions based on Heuristics ---
-            if (player.hasPuck) {
-                desiredState = 'Curling';
-                const isNearOppGoal = puckDistToOpponentGoal < FIELD_WIDTH * 0.3;
-                const isNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.25;
-
-                if (isNearOppGoal) {
-                    desiredState = 'Shooting';
-                } else if (isNearOwnGoal) {
-                    desiredState = 'Clearing';
-                }
-            } else if (opponentHasPuck) {
-                // Heuristic: Opponent Possessing Puck
-                const isPuckNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.3;
-
-                if (isPuckNearOwnGoal) {
-                    desiredState = 'DefendGoal'; // Aggressive pressure near own goal
-                } else {
-                    if (player.role === 'Back') {
-                        desiredState = 'Intercept'; // Backs position between puck and goal
-                    } else {
-                        desiredState = 'Pressure'; // Forwards/Mids apply pressure
-                    }
-                }
-                // Tackling is implicitly part of these defensive states if close enough
-
-            } else {
-                // Heuristic: Puck is Loose
-                const isPuckNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.3;
-
-                if (isPuckNearOwnGoal) {
-                    desiredState = 'ChaseLooseDef'; // Prioritize chasing puck near own goal
-                } else {
-                    // Balance chasing vs. formation
-                    const formationPos = calculateFormationPosition(player, false);
-                    const distToFormation = distance(player.x, player.y, formationPos.x, formationPos.y);
-                    const chaseThreshold = player.role === 'Forward' ? FIELD_WIDTH * 0.5 : FIELD_WIDTH * 0.35; // Forwards chase more readily
-
-                    if (puckDist < chaseThreshold || puckDist < distToFormation * 0.7) {
-                         desiredState = 'ChaseLooseOff'; // Chase loose puck offensively
-                    } else {
-                         desiredState = 'Positioning'; // Move towards formation
-                    }
-                }
-                 // Heuristic: Players far away consider surfacing/repositioning
-                 if (puckDist > FIELD_WIDTH * 0.6 && player.stamina < STAMINA_MAX * 0.5) {
-                     // If far from puck and tired, maybe position defensively or consider surfacing
-                     desiredState = 'Positioning';
-                     if (player.breath < player.maxBreath * 0.4) { // If also low breath, force surface
-                         player.state = 'Surfacing'; // Override state immediately
-                         player.breath = 0; player.dx = 0; player.dy = 0;
-                         return; // Exit AI update for this frame
                      }
                  }
             }
 
-            // Override if low stamina - force positioning/rest (unless possessing puck near goal)
-            if (player.stamina < 20 && desiredState !== 'Shooting' && desiredState !== 'Clearing' && desiredState !== 'DefendGoal') {
-                desiredState = 'Positioning';
+            // Check teammates (only if self and opponent don't have it)
+            let teammateHasPuck = false;
+            let puckCarrierTeammate = null;
+            if (!iHavePuck && !opponentHasPuck) {
+                const teammates = teams[player.color].filter(p => p !== player && !p.isOnSurface);
+                const supportRange = FIELD_WIDTH * 0.25; // Increased range slightly
+                for (const tm of teammates) {
+                     // Check if teammate is close AND their stick is likely touching puck
+                     if (distance(player.x, player.y, tm.x, tm.y) < supportRange && distance(tm.x, tm.y, puck.x, puck.y) < PLAYER_RADIUS + PUCK_RADIUS + 5) {
+                         const tmStickTipX = tm.x + STICK_LENGTH * Math.cos(tm.angle);
+                         const tmStickTipY = tm.y + STICK_LENGTH * Math.sin(tm.angle);
+                         if (distance(tmStickTipX, tmStickTipY, puck.x, puck.y) < PUCK_RADIUS + STICK_WIDTH + 2) { // Slightly tighter check
+                            // Verify teammate's own hasPuck flag for consistency? Optional.
+                            // if (tm.hasPuck) {
+                                teammateHasPuck = true;
+                                puckCarrierTeammate = tm;
+                                break;
+                            // }
+                         }
+                     }
+                }
+            }
+            // If no one clearly has it based on stick proximity, it's loose
+            const puckIsLoose = !iHavePuck && !opponentHasPuck && !teammateHasPuck;
+
+            // --- State Transitions (Prioritized) ---
+            let desiredState = player.state; // Start with current state
+
+            if (iHavePuck) {
+                // Player has the puck: Offensive states
+                const isNearOppGoal = puckDistToOpponentGoal < FIELD_WIDTH * 0.3;
+                const isDangerouslyNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.20;
+                if (isNearOppGoal) desiredState = 'Shooting';
+                else if (isDangerouslyNearOwnGoal) desiredState = 'Clearing';
+                else desiredState = 'Curling';
+
+            } else if (opponentHasPuck) {
+                // Opponent has the puck: Defensive states
+                 const isPuckNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.3;
+                 if (isPuckNearOwnGoal) desiredState = 'DefendGoal';
+                 else if (player.role.includes('Back')) desiredState = 'Intercept';
+                 else desiredState = 'Pressure';
+
+            } else if (teammateHasPuck) {
+                // Teammate has the puck: Support state
+                desiredState = 'SupportPuckCarrier';
+
+            } else { // Puck is Loose
+                // Puck is loose: Chase or Position states
+                 const isPuckNearOwnGoal = puckDistToOwnGoal < FIELD_WIDTH * 0.3;
+                 if (isPuckNearOwnGoal) {
+                     desiredState = 'ChaseLooseDef';
+                 } else {
+                     const formationPos = calculateFormationPosition(player, false);
+                     const distToFormation = distance(player.x, player.y, formationPos.x, formationPos.y);
+                     let chaseThreshold = FIELD_WIDTH * 0.35;
+                     if (player.role.includes('Forward')) chaseThreshold = FIELD_WIDTH * 0.5;
+                     // Chase if puck is close OR closer than formation spot
+                     if (puckDist < chaseThreshold || puckDist < distToFormation * 0.8) {
+                          desiredState = 'ChaseLooseOff';
+                     } else {
+                          desiredState = 'Positioning';
+                     }
+                 }
             }
 
-            player.state = desiredState;
+            // --- Stamina/Breath overrides (apply AFTER main state decision) ---
+             if (player.stamina < 20 && !['Shooting', 'Clearing', 'DefendGoal', 'Surfacing'].includes(desiredState)) {
+                 desiredState = 'Positioning'; // Fall back to positioning if tired (unless critical action/surfacing)
+             }
+             // Low breath override (handled in updatePlayers, but ensure state reflects surfacing)
+             if (player.state === 'Surfacing') {
+                  desiredState = 'Surfacing'; // Ensure surfacing state persists if set by updatePlayers
+             }
+
+
+            // --- Final State Assignment ---
+            // Only log if state changes
+            if (player.state !== desiredState) {
+                 // console.log(`${player.color} ${player.role} changing state from ${player.state} to ${desiredState}`);
+                 player.state = desiredState;
+            }
+
 
             // --- Set Target and Angle based on State ---
             let targetPos = { x: player.x, y: player.y };
@@ -818,8 +1007,8 @@
                     targetPos = calculateTargetAdvance(player, player.x + Math.cos(player.angle)*50, clearTargetY, nearestOpponent); // Move towards wall, avoid opp
                     break;
                 case 'DefendGoal': // Aggressively move towards puck carrier near own goal
-                    if (puckCarrier) {
-                        targetPos = { x: puckCarrier.x, y: puckCarrier.y };
+                    if (puckCarrierOpponent) {
+                        targetPos = { x: puckCarrierOpponent.x, y: puckCarrierOpponent.y };
                         player.angle = Math.atan2(targetPos.y - player.y, targetPos.x - player.x);
                     } else { // Fallback if carrier lost
                         targetPos = { x: puck.x, y: puck.y };
@@ -827,8 +1016,8 @@
                     }
                     break;
                 case 'Intercept': // Backs: Position between puck carrier and own goal
-                     if (puckCarrier) {
-                         targetPos = calculateInterceptPosition(player, puckCarrier, ownGoalX, goalY);
+                     if (puckCarrierOpponent) {
+                         targetPos = calculateInterceptPosition(player, puckCarrierOpponent, ownGoalX, goalY);
                          player.angle = Math.atan2(puck.y - player.y, puck.x - player.x); // Face puck
                      } else { // Fallback
                          targetPos = calculateFormationPosition(player, false);
@@ -836,8 +1025,8 @@
                      }
                     break;
                 case 'Pressure': // Forwards/Mids: Move towards puck carrier
-                    if (puckCarrier) {
-                        targetPos = { x: puckCarrier.x, y: puckCarrier.y };
+                    if (puckCarrierOpponent) {
+                        targetPos = { x: puckCarrierOpponent.x, y: puckCarrierOpponent.y };
                         player.angle = Math.atan2(targetPos.y - player.y, targetPos.x - player.x);
                     } else { // Fallback
                         targetPos = { x: puck.x, y: puck.y };
@@ -850,15 +1039,58 @@
                     targetPos = { x: puck.x, y: puck.y };
                     player.angle = Math.atan2(targetPos.y - player.y, targetPos.x - player.x);
                     break;
+
+                // *** NEW STATE LOGIC ***
+                case 'SupportPuckCarrier':
+                    // *** Add internal check: If designated carrier lost puck, reposition ***
+                    if (!puckCarrierTeammate || !puckCarrierTeammate.hasPuck) {
+                         player.state = 'Positioning'; // Revert state immediately
+                         targetPos = calculateFormationPosition(player, false);
+                         player.angle = Math.atan2(puck.y - player.y, puck.x - player.y);
+                    } else {
+                        // Aim for a spot ahead and to the side of the carrier
+                        const carrierAngle = puckCarrierTeammate.angle; // Use carrier's direction
+                        const supportDist = PLAYER_RADIUS * 6; // How far away to position
+                        // Determine side based on player role (Left/Right) or available space
+                        const sideOffsetAngle = player.role.includes('Left') ? -Math.PI / 4 : Math.PI / 4; // +/- 45 degrees
+                        const supportAngle = carrierAngle + sideOffsetAngle;
+
+                        targetPos.x = puckCarrierTeammate.x + Math.cos(supportAngle) * supportDist;
+                        targetPos.y = puckCarrierTeammate.y + Math.sin(supportAngle) * supportDist;
+
+                        // Avoid getting too close to opponents while supporting
+                        if (nearestOpponent && distance(targetPos.x, targetPos.y, nearestOpponent.x, nearestOpponent.y) < PLAYER_RADIUS * 4) {
+                            // If proposed spot is too close to opponent, try the other side or just hold position
+                            const alternateSupportAngle = carrierAngle - sideOffsetAngle;
+                            const alternateTargetX = puckCarrierTeammate.x + Math.cos(alternateSupportAngle) * supportDist;
+                            const alternateTargetY = puckCarrierTeammate.y + Math.sin(alternateSupportAngle) * supportDist;
+                            // Check if alternate spot is safer
+                            if (nearestOpponent && distance(alternateTargetX, alternateTargetY, nearestOpponent.x, nearestOpponent.y) >= PLAYER_RADIUS * 4) {
+                                targetPos.x = alternateTargetX;
+                                targetPos.y = alternateTargetY;
+                            } else {
+                                // If both sides are risky, maybe just move parallel to carrier or hold?
+                                // Simple fallback: move slightly away from carrier
+                                targetPos.x = player.x - (puckCarrierTeammate.x - player.x) * 0.1;
+                                targetPos.y = player.y - (puckCarrierTeammate.y - player.y) * 0.1;
+                            }
+                        }
+
+                        // Angle towards the calculated support position
+                        player.angle = Math.atan2(targetPos.y - player.y, targetPos.x - player.x);
+                    }
+                    break;
+
                 case 'Positioning':
                 default:
-                    targetPos = calculateFormationPosition(player, false); // isSurface = false
-                    player.angle = Math.atan2(puck.y - player.y, puck.x - player.x); // Orient towards puck generally
+                    targetPos = calculateFormationPosition(player, false);
+                    player.angle = Math.atan2(puck.y - player.y, puck.x - player.y); // Orient towards puck
                     break;
             }
 
-            player.targetX = targetPos.x;
-            player.targetY = targetPos.y;
+            // Clamp target position to field boundaries
+            player.targetX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, targetPos.x));
+            player.targetY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, targetPos.y));
         }
 
         // --- Helper Functions for AI ---
@@ -885,141 +1117,253 @@
         }
 
         function calculateFormationPosition(player, isOnSurface) {
-            // Basic formation logic (can be greatly expanded)
-            let baseX, baseY;
-            const halfY = FIELD_HEIGHT / 2;
-            const thirdX = FIELD_WIDTH / 3;
-            const sixthX = FIELD_WIDTH / 6;
-            const quarterY = FIELD_HEIGHT / 4;
+            let targetX, targetY;
 
-            // Define base X positions relative to team's side
-            const teamXForward = player.color === 'black' ? thirdX + sixthX : FIELD_WIDTH - (thirdX + sixthX);
-            const teamXMid = player.color === 'black' ? thirdX : FIELD_WIDTH - thirdX;
-            const teamXBack = player.color === 'black' ? sixthX : FIELD_WIDTH - sixthX;
-
-            // Adjust base X based on puck position (follow play)
-            const puckXFactor = (puck.x - FIELD_WIDTH / 2) / (FIELD_WIDTH / 2); // -1 to 1
-            const followFactor = 0.4;
-            const adjustedXForward = teamXForward + puckXFactor * sixthX * followFactor * (player.color === 'black' ? 1 : -1);
-            const adjustedXMid = teamXMid + puckXFactor * sixthX * followFactor * (player.color === 'black' ? 1 : -1);
-            const adjustedXBack = teamXBack + puckXFactor * sixthX * followFactor * (player.color === 'black' ? 1 : -1);
-
-            // Assign position based on role
-            if (player.role === 'Forward') {
-                baseX = adjustedXForward;
-                // Spread forwards out vertically slightly based on puck Y
-                baseY = halfY + (player.y > halfY ? 1 : -1) * quarterY * 0.8 + (puck.y - halfY) * 0.1;
-            } else if (player.role === 'Back') {
-                baseX = adjustedXBack;
-                baseY = halfY + (player.y > halfY ? 1 : -1) * quarterY * 0.6 + (puck.y - halfY) * 0.1;
-            } else { // Mid
-                baseX = adjustedXMid;
-                baseY = halfY + (puck.y - halfY) * 0.3; // Follow puck Y more
+            // Parse role
+            const roleParts = player.role.split(' ');
+            if (roleParts.length !== 2) {
+                console.warn(`Invalid role format for formation: ${player.role}`);
+                return { x: player.x, y: player.y }; // Fallback: stay put
             }
+            const side = roleParts[0]; // "Left" or "Right"
+            const baseRole = roleParts[1]; // "Forward", "Mid", "Back"
 
-            // If on surface, maybe position slightly further back?
-            if (isOnSurface) {
-                baseX -= (player.color === 'black' ? 1 : -1) * FIELD_WIDTH * 0.05;
-            }
+            // --- Determine Target X using Dynamic Line ---
+            const possessingTeam = getPuckPossessorTeam();
+            targetX = calculateDynamicLineXForPositioning(baseRole, player.color); // Vertical line (F/M/B)
 
-            // Clamp positions to field boundaries
-            baseX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, baseX));
-            baseY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, baseY));
+            // --- Determine Target Y using Left/Right Lines ---
+            const puckOnLeft = puck.x < FIELD_WIDTH / 2; // Determine if puck is on the left side
+            const leftLineX = puckOnLeft ? puck.x : puck.x - FORMATION_LINE_SPACING;
+            const rightLineX = leftLineX + FORMATION_LINE_SPACING;
 
-            return { x: baseX, y: baseY };
-        }
+            targetY = side === 'Left' ? leftLineX : rightLineX;
 
-        function shouldDive(player) {
-            // Heuristic: Dive decision logic
-            if (player.breath < player.maxBreath) return false; // Don't dive if not fully recovered
-
-            const puckDist = distance(player.x, player.y, puck.x, puck.y);
-            const ownGoalX = player.color === 'black' ? 0 : FIELD_WIDTH;
-            const opponentGoalX = player.color === 'black' ? FIELD_WIDTH : 0;
-            const goalY = FIELD_HEIGHT / 2;
-            const puckDistToOwnGoal = distance(puck.x, puck.y, ownGoalX, goalY);
-            const puckDistToOpponentGoal = distance(puck.x, puck.y, opponentGoalX, goalY);
-
-            // Dive defensively if puck is very close to own goal
-            if (puckDistToOwnGoal < FIELD_WIDTH * 0.2) return true;
-
-            // Dive offensively if puck is close to opponent goal and player is relatively near
-            if (puckDistToOpponentGoal < FIELD_WIDTH * 0.3 && puckDist < FIELD_WIDTH * 0.4) return true;
-
-            // Dive if puck is relatively close and loose, or opponent has it nearby
-            if (puckDist < FIELD_WIDTH * 0.3) {
-                 // Check if opponent has puck nearby
-                 const opponentTeam = player.color === 'black' ? teams.white : teams.black;
-                 let opponentHasPuckNearby = false;
-                 for (const opp of opponentTeam) {
-                     if (!opp.isOnSurface && distance(opp.x, opp.y, puck.x, puck.y) < PLAYER_RADIUS + PUCK_RADIUS + 15) {
-                         opponentHasPuckNearby = true;
-                         break;
-                     }
-                 }
-                 if (opponentHasPuckNearby) return true; // Dive to pressure opponent
-
-                 // Check if puck is loose and relatively close
-                 if (!opponentHasPuckNearby) return true; // Dive for loose puck
-            }
-
-
-            return false; // Default: stay on surface
-        }
-
-        function calculateTargetAdvance(player, goalX, goalY, nearestOpponent) {
-            // Calculate base vector towards goal
-            const baseAngle = Math.atan2(goalY - player.y, goalX - player.x);
-            let targetX = player.x + Math.cos(baseAngle) * 50;
-            let targetY = player.y + Math.sin(baseAngle) * 50;
-
-            // Heuristic: Avoid nearby opponents
-            if (nearestOpponent) {
-                const oppDist = distance(player.x, player.y, nearestOpponent.x, nearestOpponent.y);
-                const avoidanceThreshold = PLAYER_RADIUS * 5; // How close opponent needs to be to trigger avoidance
-
-                if (oppDist < avoidanceThreshold) {
-                    const angleToOpponent = Math.atan2(nearestOpponent.y - player.y, nearestOpponent.x - player.x);
-                    let angleDiff = baseAngle - angleToOpponent;
-                    while (angleDiff <= -Math.PI) angleDiff += 2 * Math.PI;
-                    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-
-                    // Push target away from opponent
-                    const avoidanceStrength = (avoidanceThreshold - oppDist) / avoidanceThreshold; // Stronger avoidance when closer
-                    const avoidanceAngle = baseAngle + Math.sign(angleDiff) * (Math.PI / 4) * avoidanceStrength; // Adjust angle by up to 45 deg
-
-                    targetX = player.x + Math.cos(avoidanceAngle) * 50;
-                    targetY = player.y + Math.sin(avoidanceAngle) * 50;
+            // --- Adjustments ---
+            // Teammate Avoidance (keep simple vertical push)
+            const counterpartRole = (side === 'Left' ? 'Right ' : 'Left ') + baseRole;
+            const counterpart = teams[player.color].find(p => p.role === counterpartRole);
+            if (counterpart) {
+                const dy = player.y - counterpart.y;
+                const verticalDist = Math.abs(dy);
+                const desiredVerticalDist = FIELD_HEIGHT / 6; // Increase desired separation
+                if (verticalDist < desiredVerticalDist && verticalDist > 1) {
+                    targetY += Math.sign(dy) * (desiredVerticalDist - verticalDist) * 0.2; // Stronger push
                 }
             }
-            return { x: targetX, y: targetY };
-        }
 
-        function calculateInterceptPosition(player, puckCarrier, goalXToCheck, goalYToCheck) { // Renamed params for clarity
-            // Simple intercept: position on the line between puck carrier and the specified goal center
-            const dx = goalXToCheck - puckCarrier.x;
-            const dy = goalYToCheck - puckCarrier.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-
-            if (dist < 1) return { x: puckCarrier.x, y: puckCarrier.y }; // Avoid division by zero
-
-            // Target point is ahead of carrier *towards the specified goal*
-            const interceptDist = PLAYER_RADIUS * 3; // How far in front to intercept
-            const targetX = puckCarrier.x + (dx / dist) * interceptDist;
-            const targetY = puckCarrier.y + (dy / dist) * interceptDist;
-
-            // Ensure target isn't past the goal line being defended (ownGoalX)
-            const ownGoalX = player.color === 'black' ? 0 : FIELD_WIDTH;
-            if (player.color === 'black' && targetX < ownGoalX + PLAYER_RADIUS) {
-                targetX = ownGoalX + PLAYER_RADIUS;
-            } else if (player.color === 'white' && targetX > ownGoalX - PLAYER_RADIUS) {
-                targetX = ownGoalX - PLAYER_RADIUS;
+            // Surface positioning adjustment (pull back slightly from line)
+            if (isOnSurface) {
+                targetX -= (player.color === 'black' ? 1 : -1) * FORMATION_LINE_SPACING * 0.3;
             }
 
+            // Clamp final position
+            targetX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, targetX));
+            targetY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, targetY));
+
             return { x: targetX, y: targetY };
         }
 
+        // New helper specifically for positioning (handles null possessingTeam)
+        function calculateDynamicLineXForPositioning(baseRole, teamColor) {
+            const centerBias = (puck.x - FIELD_WIDTH / 2) * PUCK_INFLUENCE_ON_LINES;
+            const dynamicCenter = FIELD_WIDTH / 2 + centerBias;
+            let lineX;
+            const spacing = FORMATION_LINE_SPACING;
 
+            if (teamColor === 'black') { // Attacking right
+                if (baseRole === 'Forward') lineX = dynamicCenter + spacing;
+                else if (baseRole === 'Back') lineX = dynamicCenter - spacing;
+                else lineX = dynamicCenter;
+            } else { // White, attacking left
+                if (baseRole === 'Forward') lineX = dynamicCenter - spacing;
+                else if (baseRole === 'Back') lineX = dynamicCenter + spacing;
+                else lineX = dynamicCenter;
+            }
+
+            // Clamp line position to field boundaries
+            const buffer = PLAYER_RADIUS * 3;
+            return Math.max(buffer, Math.min(FIELD_WIDTH - buffer, lineX));
+        }
+
+        function handleSurfaceAI(player) {
+            // Heuristic: Recover breath, move slowly to formation position, check dive conditions
+            if (player.state !== 'SurfaceMove') {
+                player.state = 'SurfaceMove'; // Ensure state is correct
+            }
+
+            const formationPos = calculateFormationPosition(player, true); // isSurface=true
+            player.targetX = formationPos.x;
+            player.targetY = formationPos.y;
+            player.angle = Math.atan2(player.targetY - player.y, player.targetX - player.x);
+
+            // Check dive conditions (only if breath is full)
+            if (player.breath >= player.maxBreath) {
+                const diveDecision = shouldDive(player); // Call shouldDive here
+                if (diveDecision) {
+                    player.isOnSurface = false;
+                    player.state = 'ChaseLooseOff'; // Example starting state after dive
+                    player.targetX = puck.x;
+                    player.targetY = puck.y;
+                    console.log(`${player.color} ${player.role} diving! Target Puck.`);
+                }
+            }
+        }
+
+function calculateTargetAdvance(player, targetX, targetY, nearestOpponent) {
+    const avoidRadius = PLAYER_RADIUS * 3; // Distance to avoid opponents
+    let adjustedX = targetX;
+    let adjustedY = targetY;
+
+    if (nearestOpponent) {
+        const dx = targetX - nearestOpponent.x;
+        const dy = targetY - nearestOpponent.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < avoidRadius) {
+            // Adjust target to avoid opponent
+            const avoidFactor = (avoidRadius - dist) / avoidRadius;
+            adjustedX += dx * avoidFactor;
+            adjustedY += dy * avoidFactor;
+        }
+    }
+
+    // Clamp adjusted position to field boundaries
+    adjustedX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, adjustedX));
+    adjustedY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, adjustedY));
+
+    return { x: adjustedX, y: adjustedY };
+}
+
+function findNearestOpponent(player) {
+    const opponents = player.color === 'black' ? teams.white : teams.black;
+    let nearestOpp = null;
+    let minDistSq = Infinity;
+
+    opponents.forEach(opp => {
+        if (!opp.isOnSurface) { // Only consider underwater opponents
+            const dSq = Math.pow(player.x - opp.x, 2) + Math.pow(player.y - opp.y, 2);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                nearestOpp = opp;
+            }
+        }
+    });
+    return nearestOpp;
+}
+
+function distance(x1, y1, x2, y2) {
+    return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+}
+
+function getPuckPossessorTeam() {
+    for (const player of teams.black) {
+        if (player.hasPuck) return 'black';
+    }
+    for (const player of teams.white) {
+        if (player.hasPuck) return 'white';
+    }
+    return null; // Puck is loose
+}
+
+function resetPositionsForKickoff() {
+    resetPuck();
+    teams.black.forEach(p => {
+        p.angle = 0;
+        p.state = 'PreKickoff';
+        p.isOnSurface = true;
+        p.breath = p.maxBreath;
+        p.stamina = STAMINA_MAX;
+        p.targetX = p.x;
+        p.targetY = p.y;
+    });
+    teams.white.forEach(p => {
+        p.angle = Math.PI;
+        p.state = 'PreKickoff';
+        p.isOnSurface = true;
+        p.breath = p.maxBreath;
+        p.stamina = STAMINA_MAX;
+        p.targetX = p.x;
+        p.targetY = p.y;
+    });
+    gamePaused = false;
+    gameState = 'Kickoff';
+    console.log("Kickoff!");
+}
+function calculateDynamicLineXForPositioning(baseRole, teamColor) {
+    const centerBias = (puck.x - FIELD_WIDTH / 2) * PUCK_INFLUENCE_ON_LINES;
+    const dynamicCenter = FIELD_WIDTH / 2 + centerBias;
+    let lineX;
+    const spacing = FORMATION_LINE_SPACING;
+
+    if (teamColor === 'black') { // Attacking right
+        if (baseRole === 'Forward') lineX = dynamicCenter + spacing;
+        else if (baseRole === 'Back') lineX = dynamicCenter - spacing;
+        else lineX = dynamicCenter;
+    } else { // White, attacking left
+        if (baseRole === 'Forward') lineX = dynamicCenter - spacing;
+        else if (baseRole === 'Back') lineX = dynamicCenter + spacing;
+        else lineX = dynamicCenter;
+    }
+
+    // Clamp line position to field boundaries
+    const buffer = PLAYER_RADIUS * 3;
+    return Math.max(buffer, Math.min(FIELD_WIDTH - buffer, lineX));
+}
+function calculateInterceptPosition(player, puckCarrier, ownGoalX, goalY) {
+    const interceptX = (puckCarrier.x + ownGoalX) / 2; // Midpoint between carrier and goal
+    const interceptY = (puckCarrier.y + goalY) / 2; // Midpoint between carrier and goal center
+
+    // Clamp intercept position to field boundaries
+    const clampedX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, interceptX));
+    const clampedY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, interceptY));
+
+    return { x: clampedX, y: clampedY };
+}
+    // --- Helper Functions for AI ---
+    function shouldDive(player) {
+        if (player.breath < player.maxBreath) return false; // Can't dive if not recovered
+
+        // --- Strict Cycling Logic ---
+        const roleParts = player.role.split(' ');
+        if (roleParts.length === 2) { // Check if it's a Left/Right role
+            const side = roleParts[0];
+            const baseRole = roleParts[1];
+            const counterpartRole = (side === 'Left' ? 'Right ' : 'Left ') + baseRole;
+            const counterpart = teams[player.color].find(p => p.role === counterpartRole);
+
+            if (counterpart) {
+                const counterpartIsUnderwater = !counterpart.isOnSurface && counterpart.state !== 'Surfacing';
+                if (counterpartIsUnderwater) {
+                    console.log(`${player.role} NOT diving because ${counterpart.role} is underwater.`);
+                    return false;
+                }
+            }
+        }
+
+        // Secondary check: Limit total underwater players
+        const teammatesUnderwater = teams[player.color].filter(p => p !== player && !p.isOnSurface && p.state !== 'Surfacing').length;
+        const maxUnderwaterAllowed = 3; // Limit underwater players
+        if (teammatesUnderwater >= maxUnderwaterAllowed) {
+            console.log(`${player.role} NOT diving because ${teammatesUnderwater} teammates are already underwater.`);
+            return false;
+        }
+
+        // Base dive conditions
+        const puckDist = distance(player.x, player.y, puck.x, puck.y);
+        const randomFactor = Math.random();
+
+        // Dive if puck is close
+        if (puckDist < FIELD_WIDTH * 0.25 && randomFactor > 0.4) return true;
+
+        // Small chance to dive proactively
+        if (randomFactor > 0.9) {
+            console.log(`${player.role} diving proactively.`);
+            return true;
+        }
+
+        return false; // Default: stay on surface
+    }
         // --- Game Logic ---
         function checkGoal() {
             const goalMinY = (FIELD_HEIGHT - GOAL_WIDTH) / 2;
@@ -1133,20 +1477,21 @@
 
         // --- Main Loop ---
         function gameLoop(timestamp) {
-            // Calculate actual FPS for breath/timer calculations
-            const actualDeltaTime = timestamp - lastTimestamp;
-            // Avoid huge jumps if tab was inactive
-            const clampedDeltaTime = Math.min(actualDeltaTime, 1000 / 15);
-            const actualFPS = 1000 / clampedDeltaTime;
-            // Update frame-dependent constants if FPS changes significantly? For now, assume target FPS.
-            // BREATH_RECOVERY_RATE = BREATH_RECOVERY_RATE_PER_SEC * (1 / actualFPS);
-            // BASE_BREATH_TIME = BASE_BREATH_TIME_SECONDS * actualFPS;
+            // Calculate time delta and elapsed frames
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+            // Avoid huge jumps if tab was inactive, clamp delta time (e.g., max 1/15th sec)
+            const clampedDeltaTime = Math.min(deltaTime, 1000 / 15);
+            // Calculate how many simulation frames should have passed based on target FPS
+            const framesElapsed = clampedDeltaTime / (1000 / FRAMES_PER_SECOND);
 
-            updateGameTime(timestamp); // Update timer based on timestamp diff
+            // Update game timer (uses framesElapsed internally now via updateGameTime logic)
+            updateGameTime(timestamp); // timestamp is still needed for timer logic
 
             if (!gamePaused) {
                 updatePuck();
-                updatePlayers();
+                // *** Pass the calculated framesElapsed to updatePlayers ***
+                updatePlayers(framesElapsed);
             }
 
             // Drawing
