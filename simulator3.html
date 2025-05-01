@@ -538,10 +538,13 @@
             }
             ctx.restore();
             // Role label (above the head)
+            ctx.save();
+            ctx.globalAlpha = 1.0; // Always draw label fully opaque
             ctx.fillStyle = '#FFF';
             ctx.font = 'bold 10px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(player.role, 0, -size * 0.35);
+            ctx.restore();
             if (player.hasPuck) ctx.restore();
             ctx.restore();
         });
