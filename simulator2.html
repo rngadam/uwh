@@ -170,54 +170,62 @@
         // --- Initialization ---
         function initializePlayers() {
             players = [];
-            currentFormation = formations[Math.floor(Math.random() * formations.length)]; // Select new random formation
+            currentFormation = formations[Math.floor(Math.random() * formations.length)];
             console.log("Initializing with formation:", currentFormation);
             const roles = getRolesForFormation(currentFormation);
-            const hands = ['L', 'R'];
-
-            // Team Red (starts on left)
+            // Assign 10% left-handed, 90% right-handed
+            const totalPlayers = roles.red.length + roles.blue.length;
+            const leftHandedCount = Math.max(1, Math.round(totalPlayers * 0.1));
+            let handPool = Array(leftHandedCount).fill('L').concat(Array(totalPlayers - leftHandedCount).fill('R'));
+            handPool = handPool.sort(() => Math.random() - 0.5);
+            let handIdx = 0;
+            function randomBreath(isMoving) {
+                return isMoving ? getRandom(10, 20) : getRandom(20, 30);
+            }
+            // Team Red
             roles.red.forEach((role, index) => {
+                const hand = handPool[handIdx++];
                 players.push({
                     id: `R${index + 1}`,
                     team: 'red',
                     role: role,
-                    hand: hands[Math.floor(Math.random() * hands.length)],
-                    x: 0.5, // Start at wall (adjusted later)
-                    y: (POOL_WIDTH_M / (roles.red.length + 1)) * (index + 1), // Spread along wall - ADJUSTED IN setInitialFormationPositions
-                    z: 1, // Depth (0=bottom, 1=surface) - Start on surface
-                    vx: 0, vy: 0, // Velocity
-                    depthState: 'surface', // surface, midwater, bottom
-                    strategy: 'initial', // initial, defend, attack, support, surface
-                    state: 'ready', // ready, diving, surfacing, chasing, holding, passing, shooting
-                    breath: 100, // Percentage
-                    maxBreath: getRandom(45, 75), // Max breath hold in seconds
-                    currentBreath: getRandom(45, 75), // Current remaining breath
-                    stamina: 100, // Percentage
-                    maxStamina: getRandom(80, 120), // Stamina influences recovery/speed
-                    speed: getRandom(1.0, 1.5), // Base speed m/s
-                    flickStrength: getRandom(5, 10), // Puck flick power
-                    hasPuck: false,
-                    targetX: 0, targetY: 0 // AI target position
-                });
-            });
-
-            // Team Blue (starts on right)
-            roles.blue.forEach((role, index) => {
-                players.push({
-                    id: `B${index + 1}`,
-                    team: 'blue',
-                    role: role,
-                    hand: hands[Math.floor(Math.random() * hands.length)],
-                    x: POOL_LENGTH_M - 0.5, // Start at wall
-                    y: (POOL_WIDTH_M / (roles.blue.length + 1)) * (index + 1), // Spread along wall - ADJUSTED IN setInitialFormationPositions
-                    z: 1, // Depth (0=bottom, 1=surface) - Start on surface
+                    hand: hand,
+                    x: 0.5,
+                    y: (POOL_WIDTH_M / (roles.red.length + 1)) * (index + 1),
+                    z: 1,
                     vx: 0, vy: 0,
                     depthState: 'surface',
                     strategy: 'initial',
                     state: 'ready',
                     breath: 100,
-                    maxBreath: getRandom(45, 75),
-                    currentBreath: getRandom(45, 75),
+                    maxBreath: randomBreath(true),
+                    currentBreath: randomBreath(true),
+                    stamina: 100,
+                    maxStamina: getRandom(80, 120),
+                    speed: getRandom(1.0, 1.5),
+                    flickStrength: getRandom(5, 10),
+                    hasPuck: false,
+                    targetX: 0, targetY: 0
+                });
+            });
+            // Team Blue
+            roles.blue.forEach((role, index) => {
+                const hand = handPool[handIdx++];
+                players.push({
+                    id: `B${index + 1}`,
+                    team: 'blue',
+                    role: role,
+                    hand: hand,
+                    x: POOL_LENGTH_M - 0.5,
+                    y: (POOL_WIDTH_M / (roles.blue.length + 1)) * (index + 1),
+                    z: 1,
+                    vx: 0, vy: 0,
+                    depthState: 'surface',
+                    strategy: 'initial',
+                    state: 'ready',
+                    breath: 100,
+                    maxBreath: randomBreath(true),
+                    currentBreath: randomBreath(true),
                     stamina: 100,
                     maxStamina: getRandom(80, 120),
                     speed: getRandom(1.0, 1.5),
@@ -281,7 +289,7 @@
                     if (nonForwardIndex < numNonForwards / 2) { // Place on one side
                         p.y = spacing * (nonForwardIndex + 1);
                     } else { // Place on the other side
-                        p.y = POOL_WIDTH_M - (spacing * (numNonForwards - nonForwardIndex));
+                        p.y = POOL_WIDTH_M - (spacing * (nonForwardIndex - numNonForwards));
                     }
                 }
                 // Ensure players stay within bounds
@@ -370,74 +378,123 @@
             ctx.beginPath(); ctx.arc(0, canvas.height, cornerPixelRadius, -Math.PI / 2, 0); ctx.stroke();
             // Bottom-Right
             ctx.beginPath(); ctx.arc(canvas.width, canvas.height, cornerPixelRadius, Math.PI, -Math.PI / 2); ctx.stroke();
+
+            // --- Wall, Axis, and Corner Labels ---
+            ctx.save();
+            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = '#222';
+            ctx.textAlign = 'center';
+            // End walls (left/right)
+            ctx.fillText('Red Wall (Endline)', -5, canvas.height / 2 - 30); // left, outside
+            ctx.fillText('Blue Wall (Endline)', canvas.width + 35, canvas.height / 2 - 30); // right, outside
+            // Sidelines (top/bottom)
+            ctx.textAlign = 'left';
+            ctx.fillText('Near Wall (Sideline)', 10, -10); // top, outside
+            ctx.fillText('Far Wall (Sideline)', 10, canvas.height + 25); // bottom, outside
+            // Axis indicators (bottom right, outside)
+            ctx.font = 'bold 14px Arial';
+            ctx.fillStyle = '#444';
+            ctx.textAlign = 'left';
+            // X axis (right, outside)
+            ctx.fillText('X →', canvas.width + 30, canvas.height + 5);
+            // Y axis (bottom, outside, arrow down)
+            ctx.save();
+            ctx.translate(canvas.width + 5, canvas.height + 30);
+            ctx.rotate(Math.PI / 2);
+            ctx.fillText('Y ↓', 0, 0);
+            ctx.restore();
+            // Endline/Sideline labels (corners)
+            ctx.font = 'bold 12px Arial';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'left';
+            ctx.fillText('X0, Y0', -5, -10); // top-left corner, outside
+            ctx.textAlign = 'right';
+            ctx.fillText('Xmax', canvas.width + 35, -10); // top-right, outside
+            ctx.fillText('Y0', canvas.width + 35, -10); // top-right, outside
+            ctx.textAlign = 'left';
+            ctx.fillText('Ymax', -5, canvas.height + 25); // bottom-left, outside
+            ctx.textAlign = 'right';
+            ctx.fillText('Xmax, Ymax', canvas.width + 35, canvas.height + 25); // bottom-right, outside
+            ctx.restore();
         }
 
         function drawPlayers() {
             players.forEach(player => {
+                // Calculate direction of movement
+                let dx = player.targetX - player.x;
+                let dy = player.targetY - player.y;
+                let angle = Math.atan2(dy, dx);
+                // If not moving, default to facing right (red) or left (blue)
+                if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = player.team === 'red' ? 0 : Math.PI;
                 const px = metersToPixels(player.x);
                 const py = metersToPixels(player.y);
-                const playerSize = metersToPixels(0.5); // Base size for stick figure parts
-                const stickLength = metersToPixels(PLAYER_STICK_LENGTH);
-
-                // Depth Shading (Darker = Surface (z=1), Lighter = Bottom (z=0))
-                const alpha = DEPTH_SHADES[player.depthState] || DEPTH_SHADES.midwater; // Fallback to midwater
-                ctx.globalAlpha = alpha;
-
+                const size = metersToPixels(0.5);
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(angle);
                 // Highlight player with puck
                 if (player.hasPuck) {
                     ctx.save();
                     ctx.shadowColor = '#FFD700';
                     ctx.shadowBlur = 20;
                 }
-
                 ctx.strokeStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.fillStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.lineWidth = 2;
-
-                // Simple Stick Figure (Placeholder - needs refinement)
-                // Head (circle)
+                // Head
                 ctx.beginPath();
-                ctx.arc(px, py, playerSize * 0.2, 0, Math.PI * 2);
+                ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Body (line)
+                // Body (rectangle)
+                ctx.fillRect(-size * 0.1, size * 0.2, size * 0.2, size * 0.4);
+                // Arms
                 ctx.beginPath();
-                ctx.moveTo(px, py + playerSize * 0.2);
-                ctx.lineTo(px, py + playerSize * 0.6);
+                if (player.hand === 'L') {
+                    // Left arm extended forward
+                    ctx.moveTo(-size * 0.1, size * 0.25);
+                    ctx.lineTo(-size * 0.5, -size * 0.1);
+                    // Right arm on side
+                    ctx.moveTo(size * 0.1, size * 0.25);
+                    ctx.lineTo(size * 0.3, size * 0.5);
+                } else {
+                    // Right arm extended forward
+                    ctx.moveTo(size * 0.1, size * 0.25);
+                    ctx.lineTo(size * 0.5, -size * 0.1);
+                    // Left arm on side
+                    ctx.moveTo(-size * 0.1, size * 0.25);
+                    ctx.lineTo(-size * 0.3, size * 0.5);
+                }
                 ctx.stroke();
-
-                // Arms (lines) - Simple V shape for now
+                // Legs
                 ctx.beginPath();
-                ctx.moveTo(px - playerSize * 0.2, py + playerSize * 0.4);
-                ctx.lineTo(px, py + playerSize * 0.3);
-                ctx.lineTo(px + playerSize * 0.2, py + playerSize * 0.4);
-                // Stick (line orthogonal to arm - simplified)
-                // TODO: Stick direction based on player orientation/hand
-                const stickEndX = px + playerSize * 0.2 + stickLength; // Example right hand stick
-                const stickEndY = py + playerSize * 0.4;
-                ctx.moveTo(px + playerSize * 0.2, py + playerSize * 0.4);
-                ctx.lineTo(stickEndX, stickEndY);
+                ctx.moveTo(-size * 0.1, size * 0.6);
+                ctx.lineTo(-size * 0.3, size * 0.9);
+                ctx.moveTo(size * 0.1, size * 0.6);
+                ctx.lineTo(size * 0.3, size * 0.9);
                 ctx.stroke();
-
-
-                // Legs (lines) - Simple V shape
-                ctx.beginPath();
-                ctx.moveTo(px - playerSize * 0.2, py + playerSize * 0.8);
-                ctx.lineTo(px, py + playerSize * 0.6);
-                ctx.lineTo(px + playerSize * 0.2, py + playerSize * 0.8);
-                ctx.stroke();
-
-
-                // Draw role label
-                ctx.fillStyle = '#FFFFFF'; // White label text
+                // Stick (orthogonal to dominant arm tip)
+                ctx.save();
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = 3;
+                if (player.hand === 'L') {
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.5, -size * 0.1);
+                    ctx.lineTo(-size * 0.5, -size * 0.1 - metersToPixels(PLAYER_STICK_LENGTH));
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.5, -size * 0.1);
+                    ctx.lineTo(size * 0.5, -size * 0.1 - metersToPixels(PLAYER_STICK_LENGTH));
+                    ctx.stroke();
+                }
+                ctx.restore();
+                // Role label
+                ctx.fillStyle = '#FFF';
                 ctx.font = 'bold 10px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(player.role, px, py - playerSize * 0.3); // Position above head
-
-                if (player.hasPuck) {
-                    ctx.restore();
-                }
-                ctx.globalAlpha = 1.0; // Reset alpha
+                ctx.fillText(player.role, 0, -size * 0.3);
+                if (player.hasPuck) ctx.restore();
+                ctx.restore();
             });
         }
 
@@ -479,59 +536,59 @@
             // --- Red Team ---
             ctx.strokeStyle = GUIDELINE_RED_COLOR;
             ctx.fillStyle = GUIDELINE_RED_COLOR;
-            // Horizontal lines (F, M, B)
-            const redF_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.F);
-            const redB_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.B);
-            ctx.beginPath(); ctx.moveTo(0, redF_Y); ctx.lineTo(canvas.width, redF_Y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(0, redB_Y); ctx.lineTo(canvas.width, redB_Y); ctx.stroke();
+            // F/M/B: vertical lines (X=constant)
+            const redF_X = metersToPixels(POOL_LENGTH_M * guidelines.red.F);
+            const redB_X = metersToPixels(POOL_LENGTH_M * guidelines.red.B);
+            ctx.beginPath(); ctx.moveTo(redF_X, 0); ctx.lineTo(redF_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(redB_X, 0); ctx.lineTo(redB_X, canvas.height); ctx.stroke();
             if (guidelines.red.M !== undefined) {
-                const redM_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.M);
-                ctx.beginPath(); ctx.moveTo(0, redM_Y); ctx.lineTo(canvas.width, redM_Y); ctx.stroke();
+                const redM_X = metersToPixels(POOL_LENGTH_M * guidelines.red.M);
+                ctx.beginPath(); ctx.moveTo(redM_X, 0); ctx.lineTo(redM_X, canvas.height); ctx.stroke();
             }
-            // Vertical lines (L, C, R)
-            const redL_X = metersToPixels(POOL_LENGTH_M * guidelines.red.L);
-            const redC_X = metersToPixels(POOL_LENGTH_M * guidelines.red.C);
-            const redR_X = metersToPixels(POOL_LENGTH_M * guidelines.red.R);
-            ctx.beginPath(); ctx.moveTo(redL_X, 0); ctx.lineTo(redL_X, canvas.height); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(redC_X, 0); ctx.lineTo(redC_X, canvas.height); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(redR_X, 0); ctx.lineTo(redR_X, canvas.height); ctx.stroke();
-            // Labels: F/M/B on left sideline, L/C/R on top endline
-            ctx.textAlign = 'left';
-            ctx.fillText('F', labelOffset, redF_Y - 2);
-            if (guidelines.red.M !== undefined) ctx.fillText('M', labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.red.M) - 2);
-            ctx.fillText('B', labelOffset, redB_Y - 2);
+            // L/C/R: horizontal lines (Y=constant)
+            const redL_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.L);
+            const redC_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.C);
+            const redR_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.R);
+            ctx.beginPath(); ctx.moveTo(0, redL_Y); ctx.lineTo(canvas.width, redL_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, redC_Y); ctx.lineTo(canvas.width, redC_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, redR_Y); ctx.lineTo(canvas.width, redR_Y); ctx.stroke();
+            // Labels: F/M/B above top edge, L/C/R to left of left edge
             ctx.textAlign = 'center';
-            ctx.fillText('L', redL_X, labelOffset);
-            ctx.fillText('C', redC_X, labelOffset);
-            ctx.fillText('R', redR_X, labelOffset);
+            ctx.fillText('F', redF_X, labelOffset);
+            if (guidelines.red.M !== undefined) ctx.fillText('M', redM_X, labelOffset);
+            ctx.fillText('B', redB_X, labelOffset);
+            ctx.textAlign = 'left';
+            ctx.fillText('L', labelOffset, redL_Y - 2);
+            ctx.fillText('C', labelOffset, redC_Y - 2);
+            ctx.fillText('R', labelOffset, redR_Y - 2);
             // --- Blue Team ---
             ctx.strokeStyle = GUIDELINE_BLUE_COLOR;
             ctx.fillStyle = GUIDELINE_BLUE_COLOR;
-            // Horizontal lines (F, M, B)
-            const blueF_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.F);
-            const blueB_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.B);
-            ctx.beginPath(); ctx.moveTo(0, blueF_Y); ctx.lineTo(canvas.width, blueF_Y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(0, blueB_Y); ctx.lineTo(canvas.width, blueB_Y); ctx.stroke();
+            // F/M/B: vertical lines (X=constant)
+            const blueF_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.F);
+            const blueB_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.B);
+            ctx.beginPath(); ctx.moveTo(blueF_X, 0); ctx.lineTo(blueF_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(blueB_X, 0); ctx.lineTo(blueB_X, canvas.height); ctx.stroke();
             if (guidelines.blue.M !== undefined) {
-                const blueM_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.M);
-                ctx.beginPath(); ctx.moveTo(0, blueM_Y); ctx.lineTo(canvas.width, blueM_Y); ctx.stroke();
+                const blueM_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.M);
+                ctx.beginPath(); ctx.moveTo(blueM_X, 0); ctx.lineTo(blueM_X, canvas.height); ctx.stroke();
             }
-            // Vertical lines (L, C, R)
-            const blueL_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.L);
-            const blueC_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.C);
-            const blueR_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.R);
-            ctx.beginPath(); ctx.moveTo(blueL_X, 0); ctx.lineTo(blueL_X, canvas.height); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(blueC_X, 0); ctx.lineTo(blueC_X, canvas.height); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(blueR_X, 0); ctx.lineTo(blueR_X, canvas.height); ctx.stroke();
-            // Labels: F/M/B on right sideline, L/C/R on bottom endline
-            ctx.textAlign = 'right';
-            ctx.fillText('F', canvas.width - labelOffset, blueF_Y - 2);
-            if (guidelines.blue.M !== undefined) ctx.fillText('M', canvas.width - labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.blue.M) - 2);
-            ctx.fillText('B', canvas.width - labelOffset, blueB_Y - 2);
+            // L/C/R: horizontal lines (Y=constant)
+            const blueL_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.L);
+            const blueC_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.C);
+            const blueR_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.R);
+            ctx.beginPath(); ctx.moveTo(0, blueL_Y); ctx.lineTo(canvas.width, blueL_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, blueC_Y); ctx.lineTo(canvas.width, blueC_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, blueR_Y); ctx.lineTo(canvas.width, blueR_Y); ctx.stroke();
+            // Labels: F/M/B below bottom edge, L/C/R to right of right edge
             ctx.textAlign = 'center';
-            ctx.fillText('L', blueL_X, canvas.height - labelOffset + 8);
-            ctx.fillText('C', blueC_X, canvas.height - labelOffset + 8);
-            ctx.fillText('R', blueR_X, canvas.height - labelOffset + 8);
+            ctx.fillText('F', blueF_X, canvas.height - labelOffset + 8);
+            if (guidelines.blue.M !== undefined) ctx.fillText('M', blueM_X, canvas.height - labelOffset + 8);
+            ctx.fillText('B', blueB_X, canvas.height - labelOffset + 8);
+            ctx.textAlign = 'right';
+            ctx.fillText('L', canvas.width - labelOffset, blueL_Y - 2);
+            ctx.fillText('C', canvas.width - labelOffset, blueC_Y - 2);
+            ctx.fillText('R', canvas.width - labelOffset, blueR_Y - 2);
             ctx.setLineDash([]);
         }
 
@@ -667,11 +724,11 @@
 
                 // --- Depth Change ---
                 if (p.state === 'diving') {
-                    p.z -= deltaTime * 0.5; // Dive speed
+                    p.z -= deltaTime * (3 / 2); // 2 seconds to dive 3m
                     if (p.z <= 0) { p.z = 0; p.depthState = 'bottom'; p.state = 'ready'; }
                     else if (p.z < 0.8) p.depthState = 'midwater';
                 } else if (p.state === 'surfacing') {
-                    p.z += deltaTime * 0.5; // Surface speed
+                    p.z += deltaTime * (3 / 2); // 2 seconds to surface 3m
                     if (p.z >= 1) { p.z = 1; p.depthState = 'surface'; /* state change handled by breath recovery */ }
                     else if (p.z > 0.2) p.depthState = 'midwater';
                 }
