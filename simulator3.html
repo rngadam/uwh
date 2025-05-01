@@ -1082,10 +1082,13 @@
     }
     // --- Player Info Card on Hover ---
     function getPlayerAtCanvasPos(x, y) {
-        // Convert screen (x, y) to pool coordinates
+        // Convert mouse position to canvas pixel coordinates
         const rect = document.getElementById('gameCanvas').getBoundingClientRect();
-        const px = (x - rect.left) / scale;
-        const py = (y - rect.top) / scale;
+        const canvasX = x - rect.left;
+        const canvasY = y - rect.top;
+        // Convert to pool (meter) coordinates
+        const px = canvasX / scale;
+        const py = canvasY / scale;
         // Find closest player within a radius
         let minDist = 0.6; // meters
         let found = null;
