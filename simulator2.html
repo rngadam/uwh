@@ -118,7 +118,7 @@
         // Colors
         const TEAM_RED_COLOR = '#FF0000';
         const TEAM_BLUE_COLOR = '#0000FF';
-        const PUCK_COLOR = '#111111'; // Dark grey/black puck
+        const PUCK_COLOR = '#FF69B4'; // Pink puck
         const GOAL_COLOR = '#FFD700'; // Gold
         const FIELD_LINE_COLOR = '#FFFFFF';
         const GRID_COLOR = 'rgba(255, 255, 255, 0.2)';
@@ -383,6 +383,13 @@
                 const alpha = DEPTH_SHADES[player.depthState] || DEPTH_SHADES.midwater; // Fallback to midwater
                 ctx.globalAlpha = alpha;
 
+                // Highlight player with puck
+                if (player.hasPuck) {
+                    ctx.save();
+                    ctx.shadowColor = '#FFD700';
+                    ctx.shadowBlur = 20;
+                }
+
                 ctx.strokeStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.fillStyle = player.team === 'red' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
                 ctx.lineWidth = 2;
@@ -427,6 +434,9 @@
                 ctx.textAlign = 'center';
                 ctx.fillText(player.role, px, py - playerSize * 0.3); // Position above head
 
+                if (player.hasPuck) {
+                    ctx.restore();
+                }
                 ctx.globalAlpha = 1.0; // Reset alpha
             });
         }
@@ -436,33 +446,29 @@
             let puckY = puck.y;
 
             if (puck.owner) {
-                // Draw puck near the owner's 'stick' position (simplified)
-                // Needs player orientation and stick position calculation for accuracy
+                // Draw puck at the front of the owner's stick
                 const owner = players.find(p => p.id === puck.owner.id);
                 if (owner) {
-                    const playerSize = metersToPixels(0.5); // Match player drawing size
-                    const stickVisualOffsetY = playerSize * 0.4 / scale; // Y offset of stick in meters
-                    const stickVisualOffsetX = playerSize * 0.2 / scale; // X offset of stick base in meters
-
-                    // Position puck slightly ahead of the drawn stick position
+                    const playerSize = metersToPixels(0.5);
+                    const stickVisualOffsetY = playerSize * 0.4 / scale;
+                    const stickVisualOffsetX = playerSize * 0.2 / scale;
+                    // Position puck at the tip of the stick
                     puckX = owner.x + (owner.team === 'red' ? (stickVisualOffsetX + PLAYER_STICK_LENGTH + PUCK_RADIUS_M) : -(stickVisualOffsetX + PLAYER_STICK_LENGTH + PUCK_RADIUS_M));
-                    puckY = owner.y + stickVisualOffsetY; // Align vertically with stick
+                    puckY = owner.y + stickVisualOffsetY;
                 } else {
-                    puck.owner = null; // Owner not found, release puck
+                    puck.owner = null;
                 }
             }
-
-            // Puck only exists visually at the bottom (z=0)
-            ctx.globalAlpha = DEPTH_SHADES.bottom; // Draw puck as if it's at the bottom
+            ctx.globalAlpha = DEPTH_SHADES.bottom;
             const puckRadiusPx = metersToPixels(PUCK_RADIUS_M);
             ctx.beginPath();
             ctx.arc(metersToPixels(puckX), metersToPixels(puckY), puckRadiusPx, 0, Math.PI * 2);
             ctx.fillStyle = PUCK_COLOR;
             ctx.fill();
-            ctx.strokeStyle = '#555555'; // Outline
+            ctx.strokeStyle = '#555555';
             ctx.lineWidth = 1;
             ctx.stroke();
-            ctx.globalAlpha = 1.0; // Reset alpha
+            ctx.globalAlpha = 1.0;
         }
 
         function drawGuidelines() {
@@ -555,6 +561,19 @@
         function updateScoreboard() {
             const scoreboardDiv = document.getElementById('scoreboard');
             scoreboardDiv.textContent = `Red: ${score.red} - Blue: ${score.blue}`;
+        }
+
+        function updateFormationDisplay() {
+            let formationDiv = document.getElementById('formationDisplay');
+            if (!formationDiv) {
+                formationDiv = document.createElement('div');
+                formationDiv.id = 'formationDisplay';
+                formationDiv.style.textAlign = 'center';
+                formationDiv.style.fontSize = '1.1em';
+                formationDiv.style.marginBottom = '5px';
+                scoreboard.parentNode.insertBefore(formationDiv, scoreboard.nextSibling);
+            }
+            formationDiv.textContent = `Current Formation: ${currentFormation}`;
         }
 
         // --- Game Logic Functions (Placeholders) ---
@@ -935,6 +954,7 @@
             initializePlayers();
             updateScoreboard();
             updatePlayerStatusTable(); // Initial table population
+            updateFormationDisplay(); // Show formation at the top
 
             // Start the game loop
             lastTime = performance.now();
