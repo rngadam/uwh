@@ -446,7 +446,7 @@
                 ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
                 ctx.fill();
                 // Body (rectangle)
-                ctx.fillRect(-size * 0.1, size * 0.2, size * 0.2, size * 0.4);
+                ctx.fillRect(-size * 0.1, size * 0.2, size * 0.4, size * 0.4);
                 // Arms
                 ctx.beginPath();
                 if (player.hand === 'L') {
@@ -544,6 +544,8 @@
             if (guidelines.red.M !== undefined) {
                 const redM_X = metersToPixels(POOL_LENGTH_M * guidelines.red.M);
                 ctx.beginPath(); ctx.moveTo(redM_X, 0); ctx.lineTo(redM_X, canvas.height); ctx.stroke();
+                ctx.textAlign = 'center';
+                ctx.fillText('M', redM_X, labelOffset);
             }
             // L/C/R: horizontal lines (Y=constant)
             const redL_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.L);
@@ -555,7 +557,6 @@
             // Labels: F/M/B above top edge, L/C/R to left of left edge
             ctx.textAlign = 'center';
             ctx.fillText('F', redF_X, labelOffset);
-            if (guidelines.red.M !== undefined) ctx.fillText('M', redM_X, labelOffset);
             ctx.fillText('B', redB_X, labelOffset);
             ctx.textAlign = 'left';
             ctx.fillText('L', labelOffset, redL_Y - 2);
@@ -572,6 +573,8 @@
             if (guidelines.blue.M !== undefined) {
                 const blueM_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.M);
                 ctx.beginPath(); ctx.moveTo(blueM_X, 0); ctx.lineTo(blueM_X, canvas.height); ctx.stroke();
+                ctx.textAlign = 'center';
+                ctx.fillText('M', blueM_X, canvas.height - labelOffset + 8);
             }
             // L/C/R: horizontal lines (Y=constant)
             const blueL_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.L);
@@ -583,7 +586,6 @@
             // Labels: F/M/B below bottom edge, L/C/R to right of right edge
             ctx.textAlign = 'center';
             ctx.fillText('F', blueF_X, canvas.height - labelOffset + 8);
-            if (guidelines.blue.M !== undefined) ctx.fillText('M', blueM_X, canvas.height - labelOffset + 8);
             ctx.fillText('B', blueB_X, canvas.height - labelOffset + 8);
             ctx.textAlign = 'right';
             ctx.fillText('L', canvas.width - labelOffset, blueL_Y - 2);
@@ -859,41 +861,108 @@
         function updateGuidelines() {
             const PLAYER_BODY_LENGTH_M = 1.5;
             const guidelineSpacing = PLAYER_BODY_LENGTH_M;
-
+            // Determine puck owner or loose puck
             let refX = puck.x;
             let refY = puck.y;
+            let refRole = null;
+            let refTeam = null;
             if (puck.owner) {
                 refX = puck.owner.x;
                 refY = puck.owner.y;
+                refRole = puck.owner.role;
+                refTeam = puck.owner.team;
             }
             const roles = getRolesForFormation(currentFormation);
             const hasMid = roles.red.some(r => r.includes('M'));
-
-            // Horizontal lines (F/M/B): vary Y, span X
-            const centerY = refY;
-            const forwardY = centerY - guidelineSpacing;
-            const backY = centerY + guidelineSpacing;
-            const midY = centerY;
-            // Vertical lines (L/C/R): vary X, span Y
-            const centerX = refX;
-            const leftX = centerX - guidelineSpacing;
-            const rightX = centerX + guidelineSpacing;
-
+            // For each team, center guidelines so that the puck owner's role is at the intersection
             function setTeamGuidelines(team) {
                 const g = guidelines[team];
-                let cx = refX, cy = refY;
-                if (puck.owner && puck.owner.team !== team) {
-                    cx += (team === 'red' ? -PLAYER_BODY_LENGTH_M * 0.5 : PLAYER_BODY_LENGTH_M * 0.5);
+                // Find which role to center on
+                let centerRole = refRole;
+                let centerX = refX;
+                let centerY = refY;
+                // If puck is loose, center on puck
+                if (!puck.owner || refTeam !== team) {
+                    centerRole = null;
+                    centerX = refX;
+                    centerY = refY;
+                } else {
+                    // Center on the puck owner's role for this team
+                    centerRole = refRole;
+                    centerX = refX;
+                    centerY = refY;
                 }
-                // Horizontal lines (F, M, B)
-                g.F = (forwardY) / POOL_WIDTH_M;
-                g.B = (backY) / POOL_WIDTH_M;
-                if (hasMid) g.M = (midY) / POOL_WIDTH_M;
+                // Determine which guideline each role uses
+                // For 3-3: LF=Left, CF=Center, RF=Right; LB=Left, CB=Center, RB=Right
+                // For 3-2-1: LF, CF, RF, LM, RM, FB
+                // For 2-2-2: LF, RF, LM, RM, LB, RB
+                // We'll use: F/M/B for line, L/C/R for position
+                // Find which line and position the centerRole is
+                let lineType = 'F';
+                let posType = 'C';
+                if (centerRole) {
+                    if (centerRole.includes('F')) lineType = 'F';
+                    else if (centerRole.includes('M')) lineType = 'M';
+                    else if (centerRole.includes('B')) lineType = 'B';
+                    // Position
+                    if (centerRole.startsWith('L')) posType = 'L';
+                    else if (centerRole.startsWith('R')) posType = 'R';
+                    else posType = 'C';
+                }
+                // Set the guideline for the puck owner's line and position to their coordinates
+                // F/M/B: vertical lines (X=constant)
+                // L/C/R: horizontal lines (Y=constant)
+                // Calculate all lines/positions equidistant from the center
+                // X: F, (M), B
+                // Y: L, C, R
+                // For X (lines):
+                let xGuides = {};
+                if (hasMid) {
+                    if (lineType === 'F') {
+                        xGuides.F = centerX;
+                        xGuides.M = centerX + guidelineSpacing;
+                        xGuides.B = centerX + 2 * guidelineSpacing;
+                    } else if (lineType === 'M') {
+                        xGuides.M = centerX;
+                        xGuides.F = centerX - guidelineSpacing;
+                        xGuides.B = centerX + guidelineSpacing;
+                    } else { // B
+                        xGuides.B = centerX;
+                        xGuides.M = centerX - guidelineSpacing;
+                        xGuides.F = centerX - 2 * guidelineSpacing;
+                    }
+                } else {
+                    if (lineType === 'F') {
+                        xGuides.F = centerX;
+                        xGuides.B = centerX + guidelineSpacing;
+                    } else { // B
+                        xGuides.B = centerX;
+                        xGuides.F = centerX - guidelineSpacing;
+                    }
+                }
+                // For Y (positions):
+                let yGuides = {};
+                if (posType === 'L') {
+                    yGuides.L = centerY;
+                    yGuides.C = centerY + guidelineSpacing;
+                    yGuides.R = centerY + 2 * guidelineSpacing;
+                } else if (posType === 'C') {
+                    yGuides.C = centerY;
+                    yGuides.L = centerY - guidelineSpacing;
+                    yGuides.R = centerY + guidelineSpacing;
+                } else { // R
+                    yGuides.R = centerY;
+                    yGuides.C = centerY - guidelineSpacing;
+                    yGuides.L = centerY - 2 * guidelineSpacing;
+                }
+                // Assign to guidelines (as ratios)
+                g.F = xGuides.F / POOL_LENGTH_M;
+                g.B = xGuides.B / POOL_LENGTH_M;
+                if (hasMid) g.M = xGuides.M / POOL_LENGTH_M;
                 else if (g.M !== undefined) delete g.M;
-                // Vertical lines (L, C, R)
-                g.L = (leftX) / POOL_LENGTH_M;
-                g.C = (centerX) / POOL_LENGTH_M;
-                g.R = (rightX) / POOL_LENGTH_M;
+                g.L = yGuides.L / POOL_WIDTH_M;
+                g.C = yGuides.C / POOL_WIDTH_M;
+                g.R = yGuides.R / POOL_WIDTH_M;
                 // Clamp
                 for (const key in g) {
                     if (["F","M","B"].includes(key)) g[key] = Math.max(0.05, Math.min(0.95, g[key]));
