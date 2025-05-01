@@ -495,7 +495,7 @@
             ctx.beginPath(); ctx.moveTo(redL_X, 0); ctx.lineTo(redL_X, canvas.height); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(redC_X, 0); ctx.lineTo(redC_X, canvas.height); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(redR_X, 0); ctx.lineTo(redR_X, canvas.height); ctx.stroke();
-            // Labels: F/M/B on left, L/C/R on top
+            // Labels: F/M/B on left sideline, L/C/R on top endline
             ctx.textAlign = 'left';
             ctx.fillText('F', labelOffset, redF_Y - 2);
             if (guidelines.red.M !== undefined) ctx.fillText('M', labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.red.M) - 2);
@@ -523,7 +523,7 @@
             ctx.beginPath(); ctx.moveTo(blueL_X, 0); ctx.lineTo(blueL_X, canvas.height); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(blueC_X, 0); ctx.lineTo(blueC_X, canvas.height); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(blueR_X, 0); ctx.lineTo(blueR_X, canvas.height); ctx.stroke();
-            // Labels: F/M/B on right, L/C/R on bottom
+            // Labels: F/M/B on right sideline, L/C/R on bottom endline
             ctx.textAlign = 'right';
             ctx.fillText('F', canvas.width - labelOffset, blueF_Y - 2);
             if (guidelines.blue.M !== undefined) ctx.fillText('M', canvas.width - labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.blue.M) - 2);
@@ -805,42 +805,35 @@
 
             let refX = puck.x;
             let refY = puck.y;
-            let refTeam = null;
-
             if (puck.owner) {
-                refTeam = puck.owner.team;
                 refX = puck.owner.x;
                 refY = puck.owner.y;
             }
-
             const roles = getRolesForFormation(currentFormation);
             const hasMid = roles.red.some(r => r.includes('M'));
 
-            // Y positions for F/M/B (horizontal lines)
+            // Horizontal lines (F/M/B): vary Y, span X
             const centerY = refY;
             const forwardY = centerY - guidelineSpacing;
             const backY = centerY + guidelineSpacing;
             const midY = centerY;
-
-            // X positions for L/C/R (vertical lines)
+            // Vertical lines (L/C/R): vary X, span Y
             const centerX = refX;
             const leftX = centerX - guidelineSpacing;
             const rightX = centerX + guidelineSpacing;
 
             function setTeamGuidelines(team) {
                 const g = guidelines[team];
-                // Defensive bias: if defending, center on opponent with puck
                 let cx = refX, cy = refY;
                 if (puck.owner && puck.owner.team !== team) {
-                    // Defensive bias: shift slightly toward own goal
                     cx += (team === 'red' ? -PLAYER_BODY_LENGTH_M * 0.5 : PLAYER_BODY_LENGTH_M * 0.5);
                 }
-                // Horizontal lines (Y): F, M, B
+                // Horizontal lines (F, M, B)
                 g.F = (forwardY) / POOL_WIDTH_M;
                 g.B = (backY) / POOL_WIDTH_M;
                 if (hasMid) g.M = (midY) / POOL_WIDTH_M;
                 else if (g.M !== undefined) delete g.M;
-                // Vertical lines (X): L, C, R
+                // Vertical lines (L, C, R)
                 g.L = (leftX) / POOL_LENGTH_M;
                 g.C = (centerX) / POOL_LENGTH_M;
                 g.R = (rightX) / POOL_LENGTH_M;
