@@ -78,6 +78,7 @@
             <canvas id="gameCanvas"></canvas>
         </div>
     </div>
+    <div id="statusTableToggle" style="cursor:pointer; background:#eee; padding:4px 10px; border-radius:4px; width:max-content; margin:10px auto 0 auto; text-align:center;">Show/Hide Player Status Table</div>
     <div id="statusTableArea">
         <table id="playerStatusTable">
             <thead>
@@ -99,6 +100,8 @@
             </tbody>
         </table>
     </div>
+    <div id="commentaryLog" style="position:fixed; right:10px; bottom:10px; width:340px; max-height:40vh; overflow-y:auto; background:#222c; color:#fff; font-size:0.95em; border-radius:8px; box-shadow:0 2px 8px #0008; padding:8px 12px; z-index:100;"></div>
+    <div id="playerInfoCard" style="display:none; position:fixed; pointer-events:none; background:#fff; color:#222; border-radius:8px; box-shadow:0 2px 8px #0008; padding:10px 16px; font-size:1em; z-index:200;"></div>
     <div id="gameOverOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; flex-direction:column; color:#fff; font-size:2em;">
         <div id="gameOverText">Game Over</div>
         <button id="restartBtn" style="margin-top:20px; font-size:1em; padding:10px 20px;">Restart</button>
@@ -136,6 +139,35 @@
     let timerInterval = null;
     let formations = { red: '', blue: '' };
     let guidelines = { red: {}, blue: {} };
+    // --- Commentary Log ---
+    let commentaryLog = [];
+    function addCommentary(msg, team) {
+        const logDiv = document.getElementById('commentaryLog');
+        const color = team === 'red' ? TEAM_COLORS.red : (team === 'blue' ? TEAM_COLORS.blue : '#fff');
+        const entry = `<div style="margin-bottom:2px;"><span style="color:${color};font-weight:bold;">${team ? team.toUpperCase() : ''}</span> <span>${msg}</span></div>`;
+        commentaryLog.push(entry);
+        if (commentaryLog.length > 30) commentaryLog.shift();
+        logDiv.innerHTML = commentaryLog.slice(-30).reverse().join('');
+    }
+    // --- Player State/Strategy Transition Tracking ---
+    let lastPlayerStates = {};
+    function trackPlayerTransitions() {
+        players.forEach(p => {
+            const key = p.id;
+            if (!lastPlayerStates[key]) {
+                lastPlayerStates[key] = { state: p.state, strategy: p.strategy };
+            } else {
+                if (lastPlayerStates[key].state !== p.state) {
+                    addCommentary(`${p.role} (${p.id}) changed state: <b>${lastPlayerStates[key].state}</b> → <b>${p.state}</b>`, p.team);
+                    lastPlayerStates[key].state = p.state;
+                }
+                if (lastPlayerStates[key].strategy !== p.strategy) {
+                    addCommentary(`${p.role} (${p.id}) changed strategy: <b>${lastPlayerStates[key].strategy}</b> → <b>${p.strategy}</b>`, p.team);
+                    lastPlayerStates[key].strategy = p.strategy;
+                }
+            }
+        });
+    }
     // --- UTILITY FUNCTIONS ---
     function metersToPixels(m) { return m * scale; }
     function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
@@ -1028,6 +1060,7 @@
         gameLoop.lastTime = now;
         updateGuidelines();
         updateAIandPhysics(deltaTime);
+        trackPlayerTransitions();
         checkGoal();
         drawField();
         drawGuidelines();
@@ -1042,6 +1075,45 @@
             showGameOver();
         }
     }
+    // --- Player Info Card on Hover ---
+    function getPlayerAtCanvasPos(x, y) {
+        // Convert screen (x, y) to pool coordinates
+        const rect = document.getElementById('gameCanvas').getBoundingClientRect();
+        const px = (x - rect.left) / scale;
+        const py = (y - rect.top) / scale;
+        // Find closest player within a radius
+        let minDist = 0.6; // meters
+        let found = null;
+        players.forEach(p => {
+            const dist = Math.sqrt((p.x - px) ** 2 + (p.y - py) ** 2);
+            if (dist < minDist) {
+                minDist = dist;
+                found = p;
+            }
+        });
+        return found;
+    }
+    function showPlayerInfoCard(player, mouseX, mouseY) {
+        const card = document.getElementById('playerInfoCard');
+        card.style.display = 'block';
+        card.style.left = (mouseX + 18) + 'px';
+        card.style.top = (mouseY + 8) + 'px';
+        card.style.border = `2px solid ${TEAM_COLORS[player.team]}`;
+        card.style.background = player.team === 'red' ? '#fff5f5' : '#f5f5ff';
+        card.innerHTML = `
+            <div style="font-weight:bold; color:${TEAM_COLORS[player.team]}">${player.team.toUpperCase()} ${player.role} (${player.id})</div>
+            <div>Hand: <b>${player.hand}</b></div>
+            <div>Depth: <b>${player.depthState}</b></div>
+            <div>Strategy: <b>${player.strategy}</b></div>
+            <div>State: <b>${player.state}</b></div>
+            <div>Breath: <b>${player.currentBreath.toFixed(1)}</b> / <b>${player.maxBreath.toFixed(1)}</b> s</div>
+            <div>Speed: <b>${player.speed.toFixed(1)}</b></div>
+            <div>Flick Strength: <b>${player.flickStrength.toFixed(1)}</b></div>
+        `;
+    }
+    function hidePlayerInfoCard() {
+        document.getElementById('playerInfoCard').style.display = 'none';
+    }
     // --- STARTUP ---
     window.addEventListener('DOMContentLoaded', () => {
         resizeCanvas();
@@ -1053,6 +1125,27 @@
             gameLoop.lastTime = undefined;
             requestAnimationFrame(gameLoop);
         };
+        // Collapsible table logic
+        const statusTableToggle = document.getElementById('statusTableToggle');
+        const statusTableArea = document.getElementById('statusTableArea');
+        statusTableToggle.onclick = () => {
+            if (statusTableArea.style.display === 'none') {
+                statusTableArea.style.display = '';
+            } else {
+                statusTableArea.style.display = 'none';
+            }
+        };
+        // Player info card hover logic
+        const canvas = document.getElementById('gameCanvas');
+        canvas.addEventListener('mousemove', e => {
+            const player = getPlayerAtCanvasPos(e.clientX, e.clientY);
+            if (player) {
+                showPlayerInfoCard(player, e.clientX, e.clientY);
+            } else {
+                hidePlayerInfoCard();
+            }
+        });
+        canvas.addEventListener('mouseleave', hidePlayerInfoCard);
         requestAnimationFrame(gameLoop);
     });
     </script>
