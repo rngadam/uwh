@@ -960,24 +960,52 @@
             if (puck.x + PUCK_RADIUS_M > POOL_LENGTH_M && (puck.y < goalStartY || puck.y > goalEndY)) { puck.x = POOL_LENGTH_M - PUCK_RADIUS_M; puck.vx *= -0.8; }
         }
     }
+    function getPuckTruePosition() {
+        // Returns the actual puck position (tip of stick if possessed, else puck.x/y)
+        if (puck.owner) {
+            const owner = players.find(p => p.id === puck.owner.id);
+            if (owner) {
+                let dx = owner.targetX - owner.x;
+                let dy = owner.targetY - owner.y;
+                let angle = owner._angle !== undefined ? owner._angle : Math.atan2(dy, dx);
+                if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = owner.team === 'red' ? 0 : Math.PI;
+                const size = metersToPixels(0.5);
+                let stickTipX, stickTipY;
+                if (owner.hand === 'L') {
+                    stickTipX = -size * 0.5;
+                    stickTipY = -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH);
+                } else {
+                    stickTipX = size * 0.5;
+                    stickTipY = -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH);
+                }
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const tipX = owner.x + (stickTipX * cosA - stickTipY * sinA) / scale;
+                const tipY = owner.y + (stickTipX * sinA + stickTipY * cosA) / scale;
+                return { x: tipX, y: tipY };
+            }
+        }
+        return { x: puck.x, y: puck.y };
+    }
     function checkGoal() {
-        // Improved: puck must be fully past the lip and within the vertical bounds of the goal tray
+        // Use the true puck position (tip of stick if possessed)
+        const puckPos = getPuckTruePosition();
         const goalLipRed = GOAL_LIP_M;
         const goalLipBlue = POOL_LENGTH_M - GOAL_LIP_M;
         const goalStartY = (POOL_WIDTH_M - GOAL_LENGTH_M) / 2;
         const goalEndY = goalStartY + GOAL_LENGTH_M;
         // Red goal (left)
         if (
-            puck.x + PUCK_RADIUS_M < goalLipRed &&
-            puck.y > goalStartY && puck.y < goalEndY
+            puckPos.x + PUCK_RADIUS_M < goalLipRed &&
+            puckPos.y > goalStartY && puckPos.y < goalEndY
         ) {
             score.blue++;
             initializeGame();
         }
         // Blue goal (right)
         else if (
-            puck.x - PUCK_RADIUS_M > goalLipBlue &&
-            puck.y > goalStartY && puck.y < goalEndY
+            puckPos.x - PUCK_RADIUS_M > goalLipBlue &&
+            puckPos.y > goalStartY && puckPos.y < goalEndY
         ) {
             score.red++;
             initializeGame();
