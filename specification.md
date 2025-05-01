@@ -24,7 +24,7 @@ Sophisticated HTML5 (Javascript, HTML and CSS and 2d library) that adapts the vi
 
 ## Screen Layout
 ¨¨
-- Layout should be scoreboard and game timer at the top. Team
+- Layout should be scoreboard and game timer at the top and selected team formation
 - pool (game area) at the center
 - Status table at the bottom.
 - game should start on load
@@ -72,8 +72,9 @@ In underwater hockey, the walls are differentiated primarily by their function a
 ---
 
 ### 3. **Puck Representation**
-- The puck is a small circle.
+- The puck is a small circle in a pink color
 - When a player has possession, the puck is shown as **"attached" to the front of the stick**.
+- Player that has the puck is highlighted
 - The puck interacts only with the **stick** (not the player's body).
 
 ---
