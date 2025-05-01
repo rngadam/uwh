@@ -149,24 +149,29 @@
         if (commentaryLog.length > 30) commentaryLog.shift();
         logDiv.innerHTML = commentaryLog.slice(-30).reverse().join('');
     }
-    // --- Player State/Strategy Transition Tracking ---
-    let lastPlayerStates = {};
-    function trackPlayerTransitions() {
-        players.forEach(p => {
-            const key = p.id;
-            if (!lastPlayerStates[key]) {
-                lastPlayerStates[key] = { state: p.state, strategy: p.strategy };
-            } else {
-                if (lastPlayerStates[key].state !== p.state) {
-                    addCommentary(`${p.role} (${p.id}) changed state: <b>${lastPlayerStates[key].state}</b> → <b>${p.state}</b>`, p.team);
-                    lastPlayerStates[key].state = p.state;
-                }
-                if (lastPlayerStates[key].strategy !== p.strategy) {
-                    addCommentary(`${p.role} (${p.id}) changed strategy: <b>${lastPlayerStates[key].strategy}</b> → <b>${p.strategy}</b>`, p.team);
-                    lastPlayerStates[key].strategy = p.strategy;
-                }
+    // --- High-Level Event Logging ---
+    let lastPuckOwner = null;
+    let lastScore = { red: 0, blue: 0 };
+    function trackHighLevelEvents() {
+        // Puck possession change
+        let currentOwner = puck.owner ? puck.owner.team + ' ' + puck.owner.role + ' (' + puck.owner.id + ')' : null;
+        if (currentOwner !== lastPuckOwner) {
+            if (lastPuckOwner && !currentOwner) {
+                addCommentary('Puck is now loose!', null);
+            } else if (currentOwner) {
+                addCommentary(`Puck taken by ${currentOwner}`, puck.owner.team);
             }
-        });
+            lastPuckOwner = currentOwner;
+        }
+        // Score change
+        if (score.red !== lastScore.red) {
+            addCommentary(`GOAL for RED! Score: Red ${score.red} - Blue ${score.blue}`, 'red');
+            lastScore.red = score.red;
+        }
+        if (score.blue !== lastScore.blue) {
+            addCommentary(`GOAL for BLUE! Score: Red ${score.red} - Blue ${score.blue}`, 'blue');
+            lastScore.blue = score.blue;
+        }
     }
     // --- UTILITY FUNCTIONS ---
     function metersToPixels(m) { return m * scale; }
@@ -1060,7 +1065,7 @@
         gameLoop.lastTime = now;
         updateGuidelines();
         updateAIandPhysics(deltaTime);
-        trackPlayerTransitions();
+        trackHighLevelEvents();
         checkGoal();
         drawField();
         drawGuidelines();
