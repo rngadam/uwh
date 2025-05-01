@@ -469,86 +469,64 @@
             ctx.lineWidth = 1;
             ctx.setLineDash([8, 4]);
             ctx.font = 'bold 10px Arial';
-            const labelOffset = 10; // Pixels offset for labels outside the field
-
-            // --- Red Team Guidelines ---
+            const labelOffset = 10;
+            // --- Red Team ---
             ctx.strokeStyle = GUIDELINE_RED_COLOR;
             ctx.fillStyle = GUIDELINE_RED_COLOR;
-
-            // Position Guidelines (L, C, R) - DRAWN HORIZONTALLY (Parallel to endlines)
-            const redL_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.L); // Using L/C/R ratios for Y
-            const redC_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.CY);
-            const redR_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.R);
-            ctx.beginPath(); ctx.moveTo(0, redL_Y); ctx.lineTo(canvas.width, redL_Y); ctx.stroke(); // Horizontal L
-            ctx.beginPath(); ctx.moveTo(0, redC_Y); ctx.lineTo(canvas.width, redC_Y); ctx.stroke(); // Horizontal C
-            ctx.beginPath(); ctx.moveTo(0, redR_Y); ctx.lineTo(canvas.width, redR_Y); ctx.stroke(); // Horizontal R
-
-
-            // Line Guidelines (F, M, B) - DRAWN VERTICALLY (Parallel to sidelines)
-            const redF_X = metersToPixels(POOL_LENGTH_M * guidelines.red.F); // Using F/M/B ratios for X
-            const redB_X = metersToPixels(POOL_LENGTH_M * guidelines.red.B);
-            ctx.beginPath(); ctx.moveTo(redF_X, 0); ctx.lineTo(redF_X, canvas.height); ctx.stroke(); // Vertical F
-            ctx.beginPath(); ctx.moveTo(redB_X, 0); ctx.lineTo(redB_X, canvas.height); ctx.stroke(); // Vertical B
+            // Horizontal lines (F, M, B)
+            const redF_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.F);
+            const redB_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.B);
+            ctx.beginPath(); ctx.moveTo(0, redF_Y); ctx.lineTo(canvas.width, redF_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, redB_Y); ctx.lineTo(canvas.width, redB_Y); ctx.stroke();
             if (guidelines.red.M !== undefined) {
-                const redM_X = metersToPixels(POOL_LENGTH_M * guidelines.red.M);
-                ctx.beginPath(); ctx.moveTo(redM_X, 0); ctx.lineTo(redM_X, canvas.height); ctx.stroke(); // Vertical M
+                const redM_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.M);
+                ctx.beginPath(); ctx.moveTo(0, redM_Y); ctx.lineTo(canvas.width, redM_Y); ctx.stroke();
             }
-
-
-            // Red Labels - Swapped positions
-            ctx.textAlign = 'left'; // L/C/R labels on left sideline
-            ctx.fillText('L', labelOffset, redL_Y - 2);
-            ctx.fillText('C', labelOffset, redC_Y - 2);
-            ctx.fillText('R', labelOffset, redR_Y - 2);
-
-
-            ctx.textAlign = 'center'; // F/M/B labels on top endline
-            ctx.fillText('F', redF_X, labelOffset);
-            if (guidelines.red.M !== undefined) {
-                 const redM_X = metersToPixels(POOL_LENGTH_M * guidelines.red.M);
-                 ctx.fillText('M', redM_X, labelOffset);
-            }
-            ctx.fillText('B', redB_X, labelOffset);
-
-
-            // --- Blue Team Guidelines ---
+            // Vertical lines (L, C, R)
+            const redL_X = metersToPixels(POOL_LENGTH_M * guidelines.red.L);
+            const redC_X = metersToPixels(POOL_LENGTH_M * guidelines.red.C);
+            const redR_X = metersToPixels(POOL_LENGTH_M * guidelines.red.R);
+            ctx.beginPath(); ctx.moveTo(redL_X, 0); ctx.lineTo(redL_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(redC_X, 0); ctx.lineTo(redC_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(redR_X, 0); ctx.lineTo(redR_X, canvas.height); ctx.stroke();
+            // Labels: F/M/B on left, L/C/R on top
+            ctx.textAlign = 'left';
+            ctx.fillText('F', labelOffset, redF_Y - 2);
+            if (guidelines.red.M !== undefined) ctx.fillText('M', labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.red.M) - 2);
+            ctx.fillText('B', labelOffset, redB_Y - 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('L', redL_X, labelOffset);
+            ctx.fillText('C', redC_X, labelOffset);
+            ctx.fillText('R', redR_X, labelOffset);
+            // --- Blue Team ---
             ctx.strokeStyle = GUIDELINE_BLUE_COLOR;
             ctx.fillStyle = GUIDELINE_BLUE_COLOR;
-
-            // Position Guidelines (L, C, R) - DRAWN HORIZONTALLY
-            const blueL_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.L); // Using L/C/R ratios for Y
-            const blueC_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.CY);
-            const blueR_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.R);
-            ctx.beginPath(); ctx.moveTo(0, blueL_Y); ctx.lineTo(canvas.width, blueL_Y); ctx.stroke(); // Horizontal L
-            ctx.beginPath(); ctx.moveTo(0, blueC_Y); ctx.lineTo(canvas.width, blueC_Y); ctx.stroke(); // Horizontal C
-            ctx.beginPath(); ctx.moveTo(0, blueR_Y); ctx.lineTo(canvas.width, blueR_Y); ctx.stroke(); // Horizontal R
-
-            // Line Guidelines (F, M, B) - DRAWN VERTICALLY
-            const blueF_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.F); // Using F/M/B ratios for X
-            const blueB_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.B);
-            ctx.beginPath(); ctx.moveTo(blueF_X, 0); ctx.lineTo(blueF_X, canvas.height); ctx.stroke(); // Vertical F
-            ctx.beginPath(); ctx.moveTo(blueB_X, 0); ctx.lineTo(blueB_X, canvas.height); ctx.stroke(); // Vertical B
-             if (guidelines.blue.M !== undefined) {
-                const blueM_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.M);
-                ctx.beginPath(); ctx.moveTo(blueM_X, 0); ctx.lineTo(blueM_X, canvas.height); ctx.stroke(); // Vertical M
+            // Horizontal lines (F, M, B)
+            const blueF_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.F);
+            const blueB_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.B);
+            ctx.beginPath(); ctx.moveTo(0, blueF_Y); ctx.lineTo(canvas.width, blueF_Y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, blueB_Y); ctx.lineTo(canvas.width, blueB_Y); ctx.stroke();
+            if (guidelines.blue.M !== undefined) {
+                const blueM_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.M);
+                ctx.beginPath(); ctx.moveTo(0, blueM_Y); ctx.lineTo(canvas.width, blueM_Y); ctx.stroke();
             }
-
-            // Blue Labels - Swapped positions
-            ctx.textAlign = 'right'; // L/C/R labels on right sideline
-            ctx.fillText('L', canvas.width - labelOffset, blueL_Y - 2);
-            ctx.fillText('C', canvas.width - labelOffset, blueC_Y - 2);
-            ctx.fillText('R', canvas.width - labelOffset, blueR_Y - 2);
-
-            ctx.textAlign = 'center'; // F/M/B labels on bottom endline
-            ctx.fillText('F', blueF_X, canvas.height - labelOffset + 8);
-             if (guidelines.blue.M !== undefined) {
-                 const blueM_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.M);
-                 ctx.fillText('M', blueM_X, canvas.height - labelOffset + 8);
-            }
-            ctx.fillText('B', blueB_X, canvas.height - labelOffset + 8);
-
-
-            ctx.setLineDash([]); // Reset line dash
+            // Vertical lines (L, C, R)
+            const blueL_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.L);
+            const blueC_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.C);
+            const blueR_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.R);
+            ctx.beginPath(); ctx.moveTo(blueL_X, 0); ctx.lineTo(blueL_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(blueC_X, 0); ctx.lineTo(blueC_X, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(blueR_X, 0); ctx.lineTo(blueR_X, canvas.height); ctx.stroke();
+            // Labels: F/M/B on right, L/C/R on bottom
+            ctx.textAlign = 'right';
+            ctx.fillText('F', canvas.width - labelOffset, blueF_Y - 2);
+            if (guidelines.blue.M !== undefined) ctx.fillText('M', canvas.width - labelOffset, metersToPixels(POOL_WIDTH_M * guidelines.blue.M) - 2);
+            ctx.fillText('B', canvas.width - labelOffset, blueB_Y - 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('L', blueL_X, canvas.height - labelOffset + 8);
+            ctx.fillText('C', blueC_X, canvas.height - labelOffset + 8);
+            ctx.fillText('R', blueR_X, canvas.height - labelOffset + 8);
+            ctx.setLineDash([]);
         }
 
         // --- UI Update Functions ---
@@ -803,91 +781,58 @@
         }
 
         function updateGuidelines() {
-            const PLAYER_BODY_LENGTH_M = 1.5; // Approx body length for spacing
-            const guidelineSpacingX = PLAYER_BODY_LENGTH_M;
-            const guidelineSpacingY = PLAYER_BODY_LENGTH_M;
+            const PLAYER_BODY_LENGTH_M = 1.5;
+            const guidelineSpacing = PLAYER_BODY_LENGTH_M;
 
-            let referenceX = puck.x;
-            let referenceY = puck.y;
-            let referenceTeam = null;
+            let refX = puck.x;
+            let refY = puck.y;
+            let refTeam = null;
 
             if (puck.owner) {
-                referenceTeam = puck.owner.team;
-                referenceX = puck.owner.x;
-                referenceY = puck.owner.y;
-            } else {
-                referenceX = puck.x;
-                referenceY = puck.y;
+                refTeam = puck.owner.team;
+                refX = puck.owner.x;
+                refY = puck.owner.y;
             }
 
-            // Determine if formation has midfielders
             const roles = getRolesForFormation(currentFormation);
-            const hasMidfielders = roles.red.some(r => r.includes('M'));
+            const hasMid = roles.red.some(r => r.includes('M'));
 
-            // Calculate guideline positions based on reference point and spacing
-            // X-Positions (F/M/B) - vertical lines
-            const centerX = referenceX;
-            const forwardX = centerX - guidelineSpacingX;
-            const backX = centerX + guidelineSpacingX;
-            const midX = centerX;
+            // Y positions for F/M/B (horizontal lines)
+            const centerY = refY;
+            const forwardY = centerY - guidelineSpacing;
+            const backY = centerY + guidelineSpacing;
+            const midY = centerY;
 
-            // Y-Positions (L/C/R) - horizontal lines
-            const centerY = referenceY;
-            const leftY = centerY - guidelineSpacingY;
-            const rightY = centerY + guidelineSpacingY;
+            // X positions for L/C/R (vertical lines)
+            const centerX = refX;
+            const leftX = centerX - guidelineSpacing;
+            const rightX = centerX + guidelineSpacing;
 
-            const updateTeamGuidelines = (team) => {
-                const teamGuides = guidelines[team];
-                const defenseBiasX = team === 'red' ? -PLAYER_BODY_LENGTH_M * 0.5 : PLAYER_BODY_LENGTH_M * 0.5;
-                const defenseBiasY = 0;
-
-                let currentRefX = referenceX;
-                let currentRefY = referenceY;
-
+            function setTeamGuidelines(team) {
+                const g = guidelines[team];
+                // Defensive bias: if defending, center on opponent with puck
+                let cx = refX, cy = refY;
                 if (puck.owner && puck.owner.team !== team) {
-                    currentRefX += defenseBiasX;
-                    currentRefY += defenseBiasY;
-                } else if (!puck.owner) {
-                    currentRefX += defenseBiasX * 0.5;
-                    currentRefY += defenseBiasY * 0.5;
+                    // Defensive bias: shift slightly toward own goal
+                    cx += (team === 'red' ? -PLAYER_BODY_LENGTH_M * 0.5 : PLAYER_BODY_LENGTH_M * 0.5);
                 }
-
-                // X-positions for F/M/B (vertical lines)
-                const currentCenterX = currentRefX;
-                const currentForwardX = currentCenterX - guidelineSpacingX;
-                const currentBackX = currentCenterX + guidelineSpacingX;
-                const currentMidX = currentCenterX;
-
-                // Y-positions for L/C/R (horizontal lines)
-                const currentCenterY = currentRefY;
-                const currentLeftY = currentCenterY - guidelineSpacingY;
-                const currentRightY = currentCenterY + guidelineSpacingY;
-
-                teamGuides.F = currentForwardX / POOL_LENGTH_M;
-                teamGuides.B = currentBackX / POOL_LENGTH_M;
-                teamGuides.C = currentCenterX / POOL_LENGTH_M;
-                if (hasMidfielders) {
-                    teamGuides.M = currentMidX / POOL_LENGTH_M;
-                } else if (teamGuides.M !== undefined) {
-                    delete teamGuides.M;
+                // Horizontal lines (Y): F, M, B
+                g.F = (forwardY) / POOL_WIDTH_M;
+                g.B = (backY) / POOL_WIDTH_M;
+                if (hasMid) g.M = (midY) / POOL_WIDTH_M;
+                else if (g.M !== undefined) delete g.M;
+                // Vertical lines (X): L, C, R
+                g.L = (leftX) / POOL_LENGTH_M;
+                g.C = (centerX) / POOL_LENGTH_M;
+                g.R = (rightX) / POOL_LENGTH_M;
+                // Clamp
+                for (const key in g) {
+                    if (["F","M","B"].includes(key)) g[key] = Math.max(0.05, Math.min(0.95, g[key]));
+                    if (["L","C","R"].includes(key)) g[key] = Math.max(0.05, Math.min(0.95, g[key]));
                 }
-
-                teamGuides.L = currentLeftY / POOL_WIDTH_M;
-                teamGuides.CY = currentCenterY / POOL_WIDTH_M; // Use CY for center Y
-                teamGuides.R = currentRightY / POOL_WIDTH_M;
-
-                // Clamp guideline values
-                for (const key in teamGuides) {
-                    if (["F", "M", "B", "C"].includes(key)) {
-                        teamGuides[key] = Math.max(0.05, Math.min(0.95, teamGuides[key]));
-                    } else if (["L", "CY", "R"].includes(key)) {
-                        teamGuides[key] = Math.max(0.05, Math.min(0.95, teamGuides[key]));
-                    }
-                }
-            };
-
-            updateTeamGuidelines('red');
-            updateTeamGuidelines('blue');
+            }
+            setTeamGuidelines('red');
+            setTeamGuidelines('blue');
         }
 
         function resetPositions() {
