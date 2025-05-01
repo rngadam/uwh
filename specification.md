@@ -24,12 +24,13 @@ Sophisticated HTML5 (Javascript, HTML and CSS and 2d library) that adapts the vi
 
 ## Screen Layout
 ¨¨
-- Layout should be scoreboard and game timer at the top and selected team formation
+- Layout should be scoreboard and game time (countdown) at the top and selected team formation
 - as team formation can be different for either team, indicate formation for each team
 - pool (game area) at the center
 - Status table at the bottom.
 - game should start on load
 - Formation is randomly select for each team (3-3, 3-2-1, 2-2-2, etc)
+- Games have two periods of 12  minutes
 ---
 
 ## Features
@@ -245,7 +246,8 @@ This table is dynamically updated during the simulation and provides a detailed 
 - Keep the dotted guidelines visible even when no team has possession of the puck, using their target positions.
 - Lines guidelines should be parallel to the end walls and position guidelines should be parallel to the sidelines. Both position and line guidelines are labeled. labeled appear outside the game area and follow the guidelines they label.
 - left, center, right should be parallel to sidelines (near and far wall). labels are outside the endlines.
-- forward, mid, back guidelines are parallel to the endlines labels are outside the sidelines.
+- forward, mid, back guidelines are parallel to the endlines
+- extend both group of guidelines outside of the pool area so labels are displayed outside the walls.
 
 ---
 

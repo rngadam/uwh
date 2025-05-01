@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Underwater Hockey 2D Simulator 3</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+        #scoreboardArea {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        #scoreboard, #timer, #formationDisplay {
+            font-size: 1.2em;
+            margin: 0 10px;
+        }
+        #gameArea {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 95vw;
+            max-width: 1200px;
+        }
+        #poolContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        #gameCanvas {
+            border: 1px solid #000;
+            background-color: #60a3d9;
+            display: block;
+        }
+        #statusTableArea {
+            width: 100%;
+            max-width: 1200px;
+            margin-top: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.9em;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 4px;
+            text-align: center;
+        }
+        th {
+            background-color: #e0e0e0;
+        }
+        tr.team-red td { background-color: #ffdddd; }
+        tr.team-blue td { background-color: #ddddff; }
+    </style>
+</head>
+<body>
+    <div id="scoreboardArea">
+        <div id="scoreboard">Red: 0 - Blue: 0</div>
+        <div id="timer">00:00</div>
+        <div id="formationDisplay">Red: 3-3 | Blue: 2-2-2</div>
+    </div>
+    <div id="gameArea">
+        <div id="poolContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </div>
+    <div id="statusTableArea">
+        <table id="playerStatusTable">
+            <thead>
+                <tr>
+                    <th>Team</th>
+                    <th>Role</th>
+                    <th>Hand</th>
+                    <th>Depth</th>
+                    <th>Strategy</th>
+                    <th>State</th>
+                    <th>Breath(s)</th>
+                    <th>Max(s)</th>
+                    <th>Speed</th>
+                    <th>FlickStr</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Player rows will be added dynamically -->
+            </tbody>
+        </table>
+    </div>
+    <div id="gameOverOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; flex-direction:column; color:#fff; font-size:2em;">
+        <div id="gameOverText">Game Over</div>
+        <button id="restartBtn" style="margin-top:20px; font-size:1em; padding:10px 20px;">Restart</button>
+    </div>
+    <script>
+    // --- CONSTANTS ---
+    const POOL_LENGTH_M = 25;
+    const POOL_WIDTH_M = 12;
+    const GOAL_LENGTH_M = 3;
+    const GOAL_LIP_M = 0.2;
+    const CORNER_RADIUS_M = 1;
+    const PLAYER_BODY_LENGTH_M = 1.5;
+    const PLAYER_STICK_LENGTH = 0.3;
+    const PUCK_RADIUS_M = 0.05;
+    const FORMATIONS = ['3-3', '3-2-1', '2-2-2'];
+    const TEAM_COLORS = { red: '#FF0000', blue: '#0000FF' };
+    const PUCK_COLOR = '#FF69B4';
+    const GOAL_COLOR = '#FFD700';
+    const FIELD_LINE_COLOR = '#FFFFFF';
+    const GRID_COLOR = 'rgba(255,255,255,0.2)';
+    const GUIDELINE_RED_COLOR = 'rgba(255,0,0,0.5)';
+    const GUIDELINE_BLUE_COLOR = 'rgba(0,0,255,0.5)';
+    const PENALTY_LINE_COLOR = 'rgba(255,255,255,0.7)';
+    const DEPTH_SHADES = { surface: 1.0, midwater: 0.7, bottom: 0.4 };
+    const LOW_BREATH_THRESHOLD = 0.25;
+    const GAME_DURATION_S = 600; // 10 minutes
+    // --- STATE ---
+    let scale = 1;
+    let players = [];
+    let puck = {};
+    let score = { red: 0, blue: 0 };
+    let gameTime = 0;
+    let timerInterval = null;
+    let formations = { red: '', blue: '' };
+    let guidelines = { red: {}, blue: {} };
+    // --- UTILITY FUNCTIONS ---
+    function metersToPixels(m) { return m * scale; }
+    function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+    function formatTime(s) {
+        const min = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+    // --- INITIALIZATION ---
+    function randomHandedness() {
+        return Math.random() < 0.1 ? 'L' : 'R';
+    }
+    function randomBreath(isMoving) {
+        return isMoving ? (10 + Math.random() * 10) : (20 + Math.random() * 10);
+    }
+    function randomSpeed() {
+        return 1.0 + Math.random() * 0.5;
+    }
+    function randomFlickStrength() {
+        return 5 + Math.random() * 5;
+    }
+    function pickFormation() {
+        return FORMATIONS[Math.floor(Math.random() * FORMATIONS.length)];
+    }
+    function getRolesForFormation(formation) {
+        if (formation === '3-3') return ['LF', 'CF', 'RF', 'LB', 'CB', 'RB'];
+        if (formation === '3-2-1') return ['LF', 'CF', 'RF', 'LM', 'RM', 'FB'];
+        if (formation === '2-2-2') return ['LF', 'RF', 'LM', 'RM', 'LB', 'RB'];
+        return ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+    }
+    function initializeGame() {
+        // Pick random formation for each team
+        formations.red = pickFormation();
+        formations.blue = pickFormation();
+        // Place puck at center
+        puck = { x: POOL_LENGTH_M/2, y: POOL_WIDTH_M/2, z: 0, owner: null, vx: 0, vy: 0 };
+        // Create players
+        players = [];
+        let redRoles = getRolesForFormation(formations.red);
+        let blueRoles = getRolesForFormation(formations.blue);
+        // Assign left-handedness randomly (10%)
+        let hands = Array(2).fill('L').concat(Array(10).fill('R'));
+        hands = hands.sort(() => Math.random() - 0.5);
+        let handIdx = 0;
+        // Red team
+        redRoles.forEach((role, i) => {
+            players.push({
+                id: `R${i+1}`,
+                team: 'red',
+                role,
+                hand: hands[handIdx++ % hands.length],
+                x: 0.1,
+                y: (POOL_WIDTH_M / (redRoles.length+1)) * (i+1),
+                z: 1,
+                vx: 0, vy: 0,
+                depthState: 'surface',
+                strategy: 'initial',
+                state: 'ready',
+                breath: 100,
+                maxBreath: randomBreath(true),
+                currentBreath: randomBreath(true),
+                stamina: 100,
+                maxStamina: 80 + Math.random()*40,
+                speed: randomSpeed(),
+                flickStrength: randomFlickStrength(),
+                hasPuck: false,
+                targetX: 0, targetY: 0
+            });
+        });
+        // Blue team
+        blueRoles.forEach((role, i) => {
+            players.push({
+                id: `B${i+1}`,
+                team: 'blue',
+                role,
+                hand: hands[handIdx++ % hands.length],
+                x: POOL_LENGTH_M-0.1,
+                y: (POOL_WIDTH_M / (blueRoles.length+1)) * (i+1),
+                z: 1,
+                vx: 0, vy: 0,
+                depthState: 'surface',
+                strategy: 'initial',
+                state: 'ready',
+                breath: 100,
+                maxBreath: randomBreath(true),
+                currentBreath: randomBreath(true),
+                stamina: 100,
+                maxStamina: 80 + Math.random()*40,
+                speed: randomSpeed(),
+                flickStrength: randomFlickStrength(),
+                hasPuck: false,
+                targetX: 0, targetY: 0
+            });
+        });
+        // Set initial positions and states
+        setInitialFormationPositions();
+        score = { red: 0, blue: 0 };
+        gameTime = 0;
+        updateScoreboard();
+        updateFormationDisplay();
+        updateTimer();
+        updatePlayerStatusTable();
+    }
+    function setInitialFormationPositions() {
+        // Assign initial X/Y based on formation and role
+        // Forwards: centered over goal, spaced evenly
+        // Mids/Backs: spread wider
+        const redRoles = getRolesForFormation(formations.red);
+        const blueRoles = getRolesForFormation(formations.blue);
+        const goalCenterY = POOL_WIDTH_M / 2;
+        const goalWidth = GOAL_LENGTH_M;
+        // Red team
+        players.forEach(p => {
+            if (p.team === 'red') {
+                const teamRoles = redRoles;
+                const roleType = p.role.includes('F') ? 'Forward' : (p.role.includes('M') ? 'Mid' : 'Back');
+                if (roleType === 'Forward') {
+                    const forwards = teamRoles.filter(r => r.includes('F'));
+                    const idx = forwards.indexOf(p.role);
+                    const n = forwards.length;
+                    p.x = 0.5;
+                    p.y = goalCenterY - (goalWidth / 2) + (goalWidth / (n + 1)) * (idx + 1);
+                } else {
+                    const others = teamRoles.filter(r => !r.includes('F'));
+                    const idx = others.indexOf(p.role);
+                    const n = others.length;
+                    const availableWidth = POOL_WIDTH_M - goalWidth;
+                    p.x = 1.5;
+                    p.y = (availableWidth / (n + 1)) * (idx + 1) + (goalWidth / 2);
+                }
+            } else {
+                // Blue team
+                const teamRoles = blueRoles;
+                const roleType = p.role.includes('F') ? 'Forward' : (p.role.includes('M') ? 'Mid' : 'Back');
+                if (roleType === 'Forward') {
+                    const forwards = teamRoles.filter(r => r.includes('F'));
+                    const idx = forwards.indexOf(p.role);
+                    const n = forwards.length;
+                    p.x = POOL_LENGTH_M - 0.5;
+                    p.y = goalCenterY - (goalWidth / 2) + (goalWidth / (n + 1)) * (idx + 1);
+                } else {
+                    const others = teamRoles.filter(r => !r.includes('F'));
+                    const idx = others.indexOf(p.role);
+                    const n = others.length;
+                    const availableWidth = POOL_WIDTH_M - goalWidth;
+                    p.x = POOL_LENGTH_M - 1.5;
+                    p.y = (availableWidth / (n + 1)) * (idx + 1) + (goalWidth / 2);
+                }
+            }
+            p.z = 1;
+            p.depthState = 'surface';
+            p.currentBreath = p.maxBreath;
+            p.hasPuck = false;
+            p.state = 'ready';
+            p.strategy = 'initial';
+            // Forwards dive immediately
+            if (p.role.includes('F')) {
+                p.state = 'diving';
+                p.strategy = 'chasing';
+                p.targetX = POOL_LENGTH_M / 2;
+                p.targetY = POOL_WIDTH_M / 2;
+            }
+        });
+    }
+    // --- RESIZE CANVAS ---
+    function resizeCanvas() {
+        const container = document.getElementById('poolContainer');
+        const canvas = document.getElementById('gameCanvas');
+        const availableWidth = container.offsetWidth;
+        const availableHeight = window.innerHeight * 0.6;
+        const scaleX = availableWidth / POOL_LENGTH_M;
+        const scaleY = availableHeight / POOL_WIDTH_M;
+        scale = Math.min(scaleX, scaleY);
+        canvas.width = metersToPixels(POOL_LENGTH_M);
+        canvas.height = metersToPixels(POOL_WIDTH_M);
+    }
+    // --- DRAWING ---
+    function drawField() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#60a3d9';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Draw meter grid
+        ctx.strokeStyle = GRID_COLOR;
+        ctx.lineWidth = 0.5;
+        for (let x = 0; x <= POOL_LENGTH_M; x++) {
+            ctx.beginPath();
+            ctx.moveTo(metersToPixels(x), 0);
+            ctx.lineTo(metersToPixels(x), canvas.height);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= POOL_WIDTH_M; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, metersToPixels(y));
+            ctx.lineTo(canvas.width, metersToPixels(y));
+            ctx.stroke();
+        }
+        // Sidelines & Endlines
+        ctx.strokeStyle = FIELD_LINE_COLOR;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        // Goals (troughs)
+        const goalPixelLength = metersToPixels(GOAL_LENGTH_M);
+        const goalStartY = (canvas.height - goalPixelLength) / 2;
+        const goalLipWidth = metersToPixels(GOAL_LIP_M);
+        ctx.fillStyle = GOAL_COLOR;
+        // Red Goal (Left)
+        ctx.fillRect(0, goalStartY, goalLipWidth, goalPixelLength);
+        // Blue Goal (Right)
+        ctx.fillRect(canvas.width - goalLipWidth, goalStartY, goalLipWidth, goalPixelLength);
+        // Goal area lines (solid 1m, dotted 3m)
+        ctx.strokeStyle = FIELD_LINE_COLOR;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(metersToPixels(1), 0);
+        ctx.lineTo(metersToPixels(1), canvas.height);
+        ctx.moveTo(metersToPixels(POOL_LENGTH_M - 1), 0);
+        ctx.lineTo(metersToPixels(POOL_LENGTH_M - 1), canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = PENALTY_LINE_COLOR;
+        ctx.beginPath();
+        ctx.moveTo(metersToPixels(3), 0);
+        ctx.lineTo(metersToPixels(3), canvas.height);
+        ctx.moveTo(metersToPixels(POOL_LENGTH_M - 3), 0);
+        ctx.lineTo(metersToPixels(POOL_LENGTH_M - 3), canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Corners (1m radius arc)
+        ctx.strokeStyle = FIELD_LINE_COLOR;
+        ctx.lineWidth = 1;
+        const cornerPixelRadius = metersToPixels(CORNER_RADIUS_M);
+        ctx.beginPath(); ctx.arc(0, 0, cornerPixelRadius, 0, Math.PI / 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(canvas.width, 0, cornerPixelRadius, Math.PI / 2, Math.PI); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, canvas.height, cornerPixelRadius, -Math.PI / 2, 0); ctx.stroke();
+        ctx.beginPath(); ctx.arc(canvas.width, canvas.height, cornerPixelRadius, Math.PI, -Math.PI / 2); ctx.stroke();
+        // Labels
+        ctx.save();
+        ctx.font = 'bold 16px Arial';
+        ctx.fillStyle = '#222';
+        ctx.textAlign = 'center';
+        ctx.fillText('Red Wall (Endline)', -5, canvas.height / 2 - 30);
+        ctx.fillText('Blue Wall (Endline)', canvas.width + 35, canvas.height / 2 - 30);
+        ctx.textAlign = 'left';
+        ctx.fillText('Near Wall (Sideline)', 10, -10);
+        ctx.fillText('Far Wall (Sideline)', 10, canvas.height + 25);
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = '#444';
+        ctx.textAlign = 'left';
+        ctx.fillText('X →', canvas.width + 30, canvas.height + 5);
+        ctx.save();
+        ctx.translate(canvas.width + 5, canvas.height + 30);
+        ctx.rotate(Math.PI / 2);
+        ctx.fillText('Y ↓', 0, 0);
+        ctx.restore();
+        ctx.font = 'bold 12px Arial';
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'left';
+        ctx.fillText('X0, Y0', -5, -10);
+        ctx.textAlign = 'right';
+        ctx.fillText('Xmax', canvas.width + 35, -10);
+        ctx.fillText('Y0', canvas.width + 35, -10);
+        ctx.textAlign = 'left';
+        ctx.fillText('Ymax', -5, canvas.height + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText('Xmax, Ymax', canvas.width + 35, canvas.height + 25);
+        ctx.restore();
+    }
+    function drawPlayers() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        players.forEach(player => {
+            // Calculate direction of movement
+            let dx = player.targetX - player.x;
+            let dy = player.targetY - player.y;
+            let angle = Math.atan2(dy, dx);
+            if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = player.team === 'red' ? 0 : Math.PI;
+            const px = metersToPixels(player.x);
+            const py = metersToPixels(player.y);
+            const size = metersToPixels(0.5);
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(angle);
+            ctx.globalAlpha = DEPTH_SHADES[player.depthState] || 1.0;
+            // Highlight player with puck
+            if (player.hasPuck) {
+                ctx.save();
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 20;
+            }
+            ctx.strokeStyle = player.team === 'red' ? TEAM_COLORS.red : TEAM_COLORS.blue;
+            ctx.fillStyle = player.team === 'red' ? TEAM_COLORS.red : TEAM_COLORS.blue;
+            ctx.lineWidth = 2;
+            // Head (front)
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            // Body (rectangle, extends backward from head)
+            ctx.fillRect(-size * 0.1, -size * 0.6, size * 0.2, size * 0.6);
+            // Arms
+            ctx.beginPath();
+            if (player.hand === 'L') {
+                // Left arm extended forward
+                ctx.moveTo(-size * 0.1, -size * 0.3);
+                ctx.lineTo(-size * 0.5, -size * 0.3);
+                // Right arm on side
+                ctx.moveTo(size * 0.1, -size * 0.3);
+                ctx.lineTo(size * 0.3, -size * 0.1);
+            } else {
+                // Right arm extended forward
+                ctx.moveTo(size * 0.1, -size * 0.3);
+                ctx.lineTo(size * 0.5, -size * 0.3);
+                // Left arm on side
+                ctx.moveTo(-size * 0.1, -size * 0.3);
+                ctx.lineTo(-size * 0.3, -size * 0.1);
+            }
+            ctx.stroke();
+            // Legs (behind the body)
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.1, 0);
+            ctx.lineTo(-size * 0.3, size * 0.3);
+            ctx.moveTo(size * 0.1, 0);
+            ctx.lineTo(size * 0.3, size * 0.3);
+            ctx.stroke();
+            // Stick (orthogonal to dominant arm tip)
+            ctx.save();
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 3;
+            if (player.hand === 'L') {
+                ctx.beginPath();
+                ctx.moveTo(-size * 0.5, -size * 0.3);
+                ctx.lineTo(-size * 0.5, -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH));
+                ctx.stroke();
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(size * 0.5, -size * 0.3);
+                ctx.lineTo(size * 0.5, -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH));
+                ctx.stroke();
+            }
+            ctx.restore();
+            // Role label (above the head)
+            ctx.fillStyle = '#FFF';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.role, 0, -size * 0.35);
+            if (player.hasPuck) ctx.restore();
+            ctx.restore();
+        });
+    }
+    function drawPuck() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let puckX = puck.x;
+        let puckY = puck.y;
+        // If puck is possessed, draw at the tip of the owner's stick
+        if (puck.owner) {
+            const owner = players.find(p => p.id === puck.owner.id);
+            if (owner) {
+                // Calculate owner's orientation
+                let dx = owner.targetX - owner.x;
+                let dy = owner.targetY - owner.y;
+                let angle = Math.atan2(dy, dx);
+                if (Math.abs(dx) + Math.abs(dy) < 0.01) angle = owner.team === 'red' ? 0 : Math.PI;
+                // Stick tip position (relative to player center)
+                const size = metersToPixels(0.5);
+                let stickTipX, stickTipY;
+                if (owner.hand === 'L') {
+                    stickTipX = -size * 0.5;
+                    stickTipY = -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH);
+                } else {
+                    stickTipX = size * 0.5;
+                    stickTipY = -size * 0.3 - metersToPixels(PLAYER_STICK_LENGTH);
+                }
+                // Rotate stick tip to world coordinates
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const tipX = owner.x + (stickTipX * cosA - stickTipY * sinA) / scale;
+                const tipY = owner.y + (stickTipX * sinA + stickTipY * cosA) / scale;
+                puckX = tipX;
+                puckY = tipY;
+            } else {
+                puck.owner = null;
+            }
+        }
+        ctx.globalAlpha = DEPTH_SHADES.bottom;
+        const puckRadiusPx = metersToPixels(PUCK_RADIUS_M);
+        ctx.beginPath();
+        ctx.arc(metersToPixels(puckX), metersToPixels(puckY), puckRadiusPx, 0, Math.PI * 2);
+        ctx.fillStyle = PUCK_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = '#555555';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+    }
+    function drawGuidelines() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.lineWidth = 1;
+        ctx.setLineDash([8, 4]);
+        ctx.font = 'bold 10px Arial';
+        const labelOffset = 10;
+        // --- Red Team ---
+        ctx.strokeStyle = GUIDELINE_RED_COLOR;
+        ctx.fillStyle = GUIDELINE_RED_COLOR;
+        // F/M/B: vertical lines (X=constant)
+        if (guidelines.red.F !== undefined) {
+            const redF_X = metersToPixels(POOL_LENGTH_M * guidelines.red.F);
+            ctx.beginPath(); ctx.moveTo(redF_X, 0); ctx.lineTo(redF_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('F', redF_X, labelOffset);
+        }
+        if (guidelines.red.M !== undefined) {
+            const redM_X = metersToPixels(POOL_LENGTH_M * guidelines.red.M);
+            ctx.beginPath(); ctx.moveTo(redM_X, 0); ctx.lineTo(redM_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('M', redM_X, labelOffset);
+        }
+        if (guidelines.red.B !== undefined) {
+            const redB_X = metersToPixels(POOL_LENGTH_M * guidelines.red.B);
+            ctx.beginPath(); ctx.moveTo(redB_X, 0); ctx.lineTo(redB_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('B', redB_X, labelOffset);
+        }
+        // L/C/R: horizontal lines (Y=constant)
+        if (guidelines.red.L !== undefined) {
+            const redL_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.L);
+            ctx.beginPath(); ctx.moveTo(0, redL_Y); ctx.lineTo(canvas.width, redL_Y); ctx.stroke();
+            ctx.textAlign = 'left';
+            ctx.fillText('L', labelOffset, redL_Y - 2);
+        }
+        if (guidelines.red.C !== undefined) {
+            const redC_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.C);
+            ctx.beginPath(); ctx.moveTo(0, redC_Y); ctx.lineTo(canvas.width, redC_Y); ctx.stroke();
+            ctx.textAlign = 'left';
+            ctx.fillText('C', labelOffset, redC_Y - 2);
+        }
+        if (guidelines.red.R !== undefined) {
+            const redR_Y = metersToPixels(POOL_WIDTH_M * guidelines.red.R);
+            ctx.beginPath(); ctx.moveTo(0, redR_Y); ctx.lineTo(canvas.width, redR_Y); ctx.stroke();
+            ctx.textAlign = 'left';
+            ctx.fillText('R', labelOffset, redR_Y - 2);
+        }
+        // --- Blue Team ---
+        ctx.strokeStyle = GUIDELINE_BLUE_COLOR;
+        ctx.fillStyle = GUIDELINE_BLUE_COLOR;
+        // F/M/B: vertical lines (X=constant)
+        if (guidelines.blue.F !== undefined) {
+            const blueF_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.F);
+            ctx.beginPath(); ctx.moveTo(blueF_X, 0); ctx.lineTo(blueF_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('F', blueF_X, canvas.height - labelOffset + 8);
+        }
+        if (guidelines.blue.M !== undefined) {
+            const blueM_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.M);
+            ctx.beginPath(); ctx.moveTo(blueM_X, 0); ctx.lineTo(blueM_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('M', blueM_X, canvas.height - labelOffset + 8);
+        }
+        if (guidelines.blue.B !== undefined) {
+            const blueB_X = metersToPixels(POOL_LENGTH_M * guidelines.blue.B);
+            ctx.beginPath(); ctx.moveTo(blueB_X, 0); ctx.lineTo(blueB_X, canvas.height); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillText('B', blueB_X, canvas.height - labelOffset + 8);
+        }
+        // L/C/R: horizontal lines (Y=constant)
+        if (guidelines.blue.L !== undefined) {
+            const blueL_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.L);
+            ctx.beginPath(); ctx.moveTo(0, blueL_Y); ctx.lineTo(canvas.width, blueL_Y); ctx.stroke();
+            ctx.textAlign = 'right';
+            ctx.fillText('L', canvas.width - labelOffset, blueL_Y - 2);
+        }
+        if (guidelines.blue.C !== undefined) {
+            const blueC_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.C);
+            ctx.beginPath(); ctx.moveTo(0, blueC_Y); ctx.lineTo(canvas.width, blueC_Y); ctx.stroke();
+            ctx.textAlign = 'right';
+            ctx.fillText('C', canvas.width - labelOffset, blueC_Y - 2);
+        }
+        if (guidelines.blue.R !== undefined) {
+            const blueR_Y = metersToPixels(POOL_WIDTH_M * guidelines.blue.R);
+            ctx.beginPath(); ctx.moveTo(0, blueR_Y); ctx.lineTo(canvas.width, blueR_Y); ctx.stroke();
+            ctx.textAlign = 'right';
+            ctx.fillText('R', canvas.width - labelOffset, blueR_Y - 2);
+        }
+        ctx.setLineDash([]);
+    }
+    // --- UI UPDATES ---
+    function updateScoreboard() {
+        document.getElementById('scoreboard').textContent = `Red: ${score.red} - Blue: ${score.blue}`;
+    }
+    function updateFormationDisplay() {
+        document.getElementById('formationDisplay').textContent = `Red: ${formations.red} | Blue: ${formations.blue}`;
+    }
+    function updateTimer() {
+        document.getElementById('timer').textContent = formatTime(gameTime);
+    }
+    function updatePlayerStatusTable() {
+        const tbody = document.querySelector('#playerStatusTable tbody');
+        tbody.innerHTML = '';
+        players.forEach(player => {
+            const row = document.createElement('tr');
+            row.classList.add(`team-${player.team}`);
+            row.innerHTML = `
+                <td>${player.team.toUpperCase()}</td>
+                <td>${player.role}</td>
+                <td>${player.hand}</td>
+                <td>${player.depthState}</td>
+                <td>${player.strategy}</td>
+                <td>${player.state}</td>
+                <td>${player.currentBreath.toFixed(1)}</td>
+                <td>${player.maxBreath.toFixed(1)}</td>
+                <td>${player.speed.toFixed(1)}</td>
+                <td>${player.flickStrength.toFixed(1)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    // --- GAME LOOP ---
+    function updateGuidelines() {
+        // For each team, center guidelines so that the puck owner's role is at the intersection
+        // If puck is loose, center on puck
+        let refX = puck.x;
+        let refY = puck.y;
+        let refRole = null;
+        let refTeam = null;
+        if (puck.owner) {
+            refX = puck.owner.x;
+            refY = puck.owner.y;
+            refRole = puck.owner.role;
+            refTeam = puck.owner.team;
+        }
+        const redRoles = getRolesForFormation(formations.red);
+        const blueRoles = getRolesForFormation(formations.blue);
+        const hasRedMid = redRoles.some(r => r.includes('M'));
+        const hasBlueMid = blueRoles.some(r => r.includes('M'));
+        function setTeamGuidelines(team, hasMid, teamRoles) {
+            const g = guidelines[team];
+            let centerRole = refRole;
+            let centerX = refX;
+            let centerY = refY;
+            if (!puck.owner || refTeam !== team) {
+                centerRole = null;
+                centerX = refX;
+                centerY = refY;
+            }
+            let lineType = 'F';
+            let posType = 'C';
+            if (centerRole) {
+                if (centerRole.includes('F')) lineType = 'F';
+                else if (centerRole.includes('M')) lineType = 'M';
+                else if (centerRole.includes('B')) lineType = 'B';
+                if (centerRole.startsWith('L')) posType = 'L';
+                else if (centerRole.startsWith('R')) posType = 'R';
+                else posType = 'C';
+            }
+            // X: F, (M), B
+            // Y: L, C, R
+            let guidelineSpacing = PLAYER_BODY_LENGTH_M;
+            let xGuides = {};
+            if (hasMid) {
+                if (lineType === 'F') {
+                    xGuides.F = centerX;
+                    xGuides.M = centerX + guidelineSpacing;
+                    xGuides.B = centerX + 2 * guidelineSpacing;
+                } else if (lineType === 'M') {
+                    xGuides.M = centerX;
+                    xGuides.F = centerX - guidelineSpacing;
+                    xGuides.B = centerX + guidelineSpacing;
+                } else {
+                    xGuides.B = centerX;
+                    xGuides.M = centerX - guidelineSpacing;
+                    xGuides.F = centerX - 2 * guidelineSpacing;
+                }
+            } else {
+                if (lineType === 'F') {
+                    xGuides.F = centerX;
+                    xGuides.B = centerX + guidelineSpacing;
+                } else {
+                    xGuides.B = centerX;
+                    xGuides.F = centerX - guidelineSpacing;
+                }
+            }
+            let yGuides = {};
+            if (posType === 'L') {
+                yGuides.L = centerY;
+                yGuides.C = centerY + guidelineSpacing;
+                yGuides.R = centerY + 2 * guidelineSpacing;
+            } else if (posType === 'C') {
+                yGuides.C = centerY;
+                yGuides.L = centerY - guidelineSpacing;
+                yGuides.R = centerY + guidelineSpacing;
+            } else {
+                yGuides.R = centerY;
+                yGuides.C = centerY - guidelineSpacing;
+                yGuides.L = centerY - 2 * guidelineSpacing;
+            }
+            g.F = xGuides.F / POOL_LENGTH_M;
+            g.B = xGuides.B / POOL_LENGTH_M;
+            if (hasMid) g.M = xGuides.M / POOL_LENGTH_M;
+            else if (g.M !== undefined) delete g.M;
+            g.L = yGuides.L / POOL_WIDTH_M;
+            g.C = yGuides.C / POOL_WIDTH_M;
+            g.R = yGuides.R / POOL_WIDTH_M;
+            // Clamp
+            for (const key in g) {
+                if (["F","M","B"].includes(key)) g[key] = clamp(g[key], 0.05, 0.95);
+                if (["L","C","R"].includes(key)) g[key] = clamp(g[key], 0.05, 0.95);
+            }
+        }
+        setTeamGuidelines('red', hasRedMid, redRoles);
+        setTeamGuidelines('blue', hasBlueMid, blueRoles);
+    }
+    function updateAIandPhysics(deltaTime) {
+        // --- Player AI and Movement ---
+        players.forEach(p => {
+            // Breath management
+            if (p.depthState !== 'surface' && p.state !== 'surfacing') {
+                p.currentBreath -= deltaTime;
+                if (p.currentBreath <= p.maxBreath * LOW_BREATH_THRESHOLD) {
+                    p.currentBreath = Math.max(0, p.currentBreath);
+                    p.strategy = 'surface';
+                    if (p.hasPuck) {
+                        // Drop puck if surfacing
+                        puck.owner = null;
+                        p.hasPuck = false;
+                    }
+                    p.state = 'surfacing';
+                }
+            } else if (p.depthState === 'surface' || p.state === 'surfacing') {
+                p.currentBreath += deltaTime * 2;
+                if (p.currentBreath >= p.maxBreath) {
+                    p.currentBreath = p.maxBreath;
+                    if (p.state === 'surfacing') {
+                        p.state = 'ready';
+                        p.depthState = 'surface';
+                        p.z = 1;
+                    }
+                }
+            }
+            // Depth change
+            if (p.state === 'diving') {
+                p.z -= deltaTime * (3 / 2);
+                if (p.z <= 0) { p.z = 0; p.depthState = 'bottom'; p.state = 'ready'; }
+                else if (p.z < 0.8) p.depthState = 'midwater';
+            } else if (p.state === 'surfacing') {
+                p.z += deltaTime * (3 / 2);
+                if (p.z >= 1) { p.z = 1; p.depthState = 'surface'; }
+                else if (p.z > 0.2) p.depthState = 'midwater';
+            }
+            // Simple AI: go to guideline or chase puck if close
+            let dx = puck.x - p.x;
+            let dy = puck.y - p.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (!p.hasPuck && p.state === 'ready' && p.depthState === 'bottom' && dist < 5) {
+                p.targetX = puck.x;
+                p.targetY = puck.y;
+                p.strategy = 'chasing';
+            } else if (p.state === 'ready') {
+                // Go to guideline position
+                const g = guidelines[p.team];
+                let targetX_Ratio, targetY_Ratio;
+                if (p.role.includes('L')) targetY_Ratio = g.L;
+                else if (p.role.includes('R')) targetY_Ratio = g.R;
+                else targetY_Ratio = g.C;
+                if (p.role.includes('F')) targetX_Ratio = g.F;
+                else if (p.role.includes('B')) targetX_Ratio = g.B;
+                else if (g.M !== undefined && p.role.includes('M')) targetX_Ratio = g.M;
+                else targetX_Ratio = (g.F + g.B) / 2;
+                p.targetX = targetX_Ratio * POOL_LENGTH_M;
+                p.targetY = targetY_Ratio * POOL_WIDTH_M;
+                p.strategy = 'positioning';
+            }
+            // Move towards target
+            dx = p.targetX - p.x;
+            dy = p.targetY - p.y;
+            dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 0.1) {
+                const moveSpeed = p.speed * deltaTime;
+                p.x += (dx / dist) * moveSpeed;
+                p.y += (dy / dist) * moveSpeed;
+            }
+            // Puck interaction
+            if (p.depthState === 'bottom' && p.state !== 'surfacing' && p.state !== 'diving') {
+                const puckDist = Math.sqrt(Math.pow(p.x - puck.x, 2) + Math.pow(p.y - puck.y, 2));
+                const interactionDist = PLAYER_STICK_LENGTH + PUCK_RADIUS_M + 0.1;
+                if (!puck.owner && puckDist < interactionDist) {
+                    puck.owner = p;
+                    p.hasPuck = true;
+                    puck.vx = 0;
+                    puck.vy = 0;
+                    p.state = 'holding';
+                } else if (p.hasPuck) {
+                    // Occasionally push puck forward
+                    if (Math.random() < 0.02) {
+                        const pushStrength = 3;
+                        const pushAngle = (p.team === 'red') ? 0 : Math.PI;
+                        puck.vx = Math.cos(pushAngle) * pushStrength;
+                        puck.vy = Math.sin(pushAngle) * pushStrength;
+                        puck.owner = null;
+                        p.hasPuck = false;
+                        p.state = 'chasing';
+                    }
+                }
+            }
+        });
+
+        // --- Player Collision Avoidance ---
+        const MIN_PLAYER_DIST = 0.5;
+        for (let i = 0; i < players.length; i++) {
+            for (let j = i + 1; j < players.length; j++) {
+                const p1 = players[i];
+                const p2 = players[j];
+                if (p1.depthState === p2.depthState && (p1.depthState === 'surface' || p1.depthState === 'bottom')) {
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < MIN_PLAYER_DIST && dist > 0.01) {
+                        const overlap = MIN_PLAYER_DIST - dist;
+                        const pushFactor = overlap * 0.5;
+                        const pushX = (dx / dist) * pushFactor;
+                        const pushY = (dy / dist) * pushFactor;
+                        p1.x -= pushX;
+                        p1.y -= pushY;
+                        p2.x += pushX;
+                        p2.y += pushY;
+                    }
+                }
+            }
+        }
+
+        // --- Puck Physics ---
+        if (!puck.owner) {
+            const friction = 0.98;
+            puck.x += puck.vx * deltaTime;
+            puck.y += puck.vy * deltaTime;
+            puck.vx *= friction;
+            puck.vy *= friction;
+            if (Math.abs(puck.vx) < 0.01) puck.vx = 0;
+            if (Math.abs(puck.vy) < 0.01) puck.vy = 0;
+            // Wall collisions
+            if (puck.y - PUCK_RADIUS_M < 0) { puck.y = PUCK_RADIUS_M; puck.vy *= -0.8; }
+            if (puck.y + PUCK_RADIUS_M > POOL_WIDTH_M) { puck.y = POOL_WIDTH_M - PUCK_RADIUS_M; puck.vy *= -0.8; }
+            const goalStartY = (POOL_WIDTH_M - GOAL_LENGTH_M) / 2;
+            const goalEndY = goalStartY + GOAL_LENGTH_M;
+            if (puck.x - PUCK_RADIUS_M < 0 && (puck.y < goalStartY || puck.y > goalEndY)) { puck.x = PUCK_RADIUS_M; puck.vx *= -0.8; }
+            if (puck.x + PUCK_RADIUS_M > POOL_LENGTH_M && (puck.y < goalStartY || puck.y > goalEndY)) { puck.x = POOL_LENGTH_M - PUCK_RADIUS_M; puck.vx *= -0.8; }
+        }
+    }
+    function checkGoal() {
+        const goalLipRed = GOAL_LIP_M;
+        const goalLipBlue = POOL_LENGTH_M - GOAL_LIP_M;
+        if (puck.x + PUCK_RADIUS_M < goalLipRed) {
+            score.blue++;
+            initializeGame();
+        } else if (puck.x - PUCK_RADIUS_M > goalLipBlue) {
+            score.red++;
+            initializeGame();
+        }
+    }
+    function showGameOver() {
+        const overlay = document.getElementById('gameOverOverlay');
+        overlay.style.display = 'flex';
+        document.getElementById('gameOverText').textContent = `Game Over! Final Score: Red ${score.red} - Blue ${score.blue}`;
+    }
+    function hideGameOver() {
+        document.getElementById('gameOverOverlay').style.display = 'none';
+    }
+    function gameLoop() {
+        const now = performance.now();
+        if (!gameLoop.lastTime) gameLoop.lastTime = now;
+        const deltaTime = (now - gameLoop.lastTime) / 1000;
+        gameLoop.lastTime = now;
+        updateGuidelines();
+        updateAIandPhysics(deltaTime);
+        checkGoal();
+        drawField();
+        drawGuidelines();
+        drawPlayers();
+        drawPuck();
+        updatePlayerStatusTable();
+        updateTimer();
+        gameTime += deltaTime;
+        if (gameTime < GAME_DURATION_S) {
+            requestAnimationFrame(gameLoop);
+        } else {
+            showGameOver();
+        }
+    }
+    // --- STARTUP ---
+    window.addEventListener('DOMContentLoaded', () => {
+        resizeCanvas();
+        initializeGame();
+        window.addEventListener('resize', resizeCanvas);
+        document.getElementById('restartBtn').onclick = () => {
+            hideGameOver();
+            initializeGame();
+            gameLoop.lastTime = undefined;
+            requestAnimationFrame(gameLoop);
+        };
+        requestAnimationFrame(gameLoop);
+    });
+    </script>
+</body>
+</html>
