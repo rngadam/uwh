@@ -125,6 +125,7 @@
     const DEPTH_SHADES = { surface: 1.0, midwater: 0.7, bottom: 0.4 };
     const LOW_BREATH_THRESHOLD = 0.25;
     const GAME_DURATION_S = 600; // 10 minutes
+    const PUCK_TRAIL_LENGTH = 60; // Longer trail (about 1 second at 60fps)
     // --- STATE ---
     let scale = 1;
     let players = [];
@@ -341,10 +342,23 @@
         const goalPixelLength = metersToPixels(GOAL_LENGTH_M);
         const goalStartY = (canvas.height - goalPixelLength) / 2;
         const goalLipWidth = metersToPixels(GOAL_LIP_M);
+        // Team color borders for goals
+        ctx.save();
+        ctx.lineWidth = metersToPixels(0.15); // Thick border
+        // Red goal border (left)
+        ctx.strokeStyle = TEAM_COLORS.red;
+        ctx.beginPath();
+        ctx.rect(0, goalStartY, goalLipWidth, goalPixelLength);
+        ctx.stroke();
+        // Blue goal border (right)
+        ctx.strokeStyle = TEAM_COLORS.blue;
+        ctx.beginPath();
+        ctx.rect(canvas.width - goalLipWidth, goalStartY, goalLipWidth, goalPixelLength);
+        ctx.stroke();
+        ctx.restore();
+        // Fill goal troughs
         ctx.fillStyle = GOAL_COLOR;
-        // Red Goal (Left)
         ctx.fillRect(0, goalStartY, goalLipWidth, goalPixelLength);
-        // Blue Goal (Right)
         ctx.fillRect(canvas.width - goalLipWidth, goalStartY, goalLipWidth, goalPixelLength);
         // Goal area lines (solid 1m, dotted 3m)
         ctx.strokeStyle = FIELD_LINE_COLOR;
@@ -529,8 +543,8 @@
         }
         // --- Glow Puck Trail ---
         puckTrail.push({ x: puckX, y: puckY, t: Date.now() });
-        // Keep only last 20 positions (about 1/3 second at 60fps)
-        while (puckTrail.length > 20) puckTrail.shift();
+        // Keep only last PUCK_TRAIL_LENGTH positions
+        while (puckTrail.length > PUCK_TRAIL_LENGTH) puckTrail.shift();
         for (let i = 0; i < puckTrail.length; i++) {
             const alpha = (i + 1) / puckTrail.length * 0.5;
             ctx.globalAlpha = alpha;
@@ -947,12 +961,24 @@
         }
     }
     function checkGoal() {
+        // Improved: puck must be fully past the lip and within the vertical bounds of the goal tray
         const goalLipRed = GOAL_LIP_M;
         const goalLipBlue = POOL_LENGTH_M - GOAL_LIP_M;
-        if (puck.x + PUCK_RADIUS_M < goalLipRed) {
+        const goalStartY = (POOL_WIDTH_M - GOAL_LENGTH_M) / 2;
+        const goalEndY = goalStartY + GOAL_LENGTH_M;
+        // Red goal (left)
+        if (
+            puck.x + PUCK_RADIUS_M < goalLipRed &&
+            puck.y > goalStartY && puck.y < goalEndY
+        ) {
             score.blue++;
             initializeGame();
-        } else if (puck.x - PUCK_RADIUS_M > goalLipBlue) {
+        }
+        // Blue goal (right)
+        else if (
+            puck.x - PUCK_RADIUS_M > goalLipBlue &&
+            puck.y > goalStartY && puck.y < goalEndY
+        ) {
             score.red++;
             initializeGame();
         }
