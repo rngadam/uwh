@@ -157,6 +157,13 @@ document.addEventListener('DOMContentLoaded', function() {
           const dir = directions[dirIdx];
           let nr = u.row + dir.dr, nc = u.col + dir.dc;
           if (nr < 1 || nr > 25 || nc < 1 || nc > 15) continue;
+          // Interdire d'entrer dans sa propre zone de but
+          if (
+            (u.team === 'blue' && nr === 1 && nc >= 7 && nc <= 9) ||
+            (u.team === 'red' && nr === 25 && nc >= 7 && nc <= 9)
+          ) {
+            continue;
+          }
           // Pas d'adversaire sur la case
           let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
           let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
@@ -205,10 +212,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // 4. Sinon, avancer vers le but adverse
         let targetRow = u.row + (u.team === 'blue' ? 1 : -1);
-        u.planned = { action: 'move', to: { row: Math.max(1, Math.min(25, targetRow)), col: u.col }, dir: u.facing };
-        u.lastMoveDir = null;
-        u.prevRow = u.row;
-        u.prevCol = u.col;
+        let nextRow = Math.max(1, Math.min(25, targetRow));
+        let nextCol = u.col;
+        // Interdire d'entrer dans sa propre zone de but
+        if (
+          (u.team === 'blue' && nextRow === 1 && nextCol >= 7 && nextCol <= 9) ||
+          (u.team === 'red' && nextRow === 25 && nextCol >= 7 && nextCol <= 9)
+        ) {
+          // Attendre sur place
+          u.planned = { action: 'wait', to: { row: u.row, col: u.col }, dir: u.facing };
+        } else {
+          u.planned = { action: 'move', to: { row: nextRow, col: nextCol }, dir: u.facing };
+          u.lastMoveDir = null;
+          u.prevRow = u.row;
+          u.prevCol = u.col;
+        }
         continue;
       }
 
