@@ -129,11 +129,11 @@ function randomProb(min, max) { return Math.round((Math.random() * (max - min) +
 function randomTurnSpeed() { return [1/3, 2/3, 1][Math.floor(Math.random()*3)]; }
 
 function genUnit(team, idx, row, col, facing) {
+  // Correction : breath initialisé à undefined, sera fixé après création
   return {
     team, idx, name: unitAcronyms[idx],
-    row, col, facing, // direction: 0-5 (hex)
+    row, col, facing,
     atSurface: true,
-    breath: 20,
     stats: {
       recovery: randomStat(1,5),
       maxHold: randomStat(15,25),
@@ -142,32 +142,32 @@ function genUnit(team, idx, row, col, facing) {
       flick: randomStat(1,3),
       turn: randomTurnSpeed()
     },
+    breath: undefined,
     planned: { action: 'move', to: {row, col}, dir: facing }
   };
 }
 
-// Positions initiales (voir README)
 function getInitialUnits() {
-  // Bleu (ligne 1) : [LB, LF, CF, RF, RB, CB]
-  // LB: 1,6 | LF: 1,7 | CF: 1,8 | RF: 1,9 | RB: 1,10 | CB: 1,11
+  // Bleu (ligne 1) : LB (1,6), LF (1,7), CF (1,8), RF (1,9), RB (1,10), CB (1,11)
   const blue = [
-    genUnit('blue', 3, 1, 6, 3), // LB
-    genUnit('blue', 0, 1, 7, 3), // LF
-    genUnit('blue', 1, 1, 8, 3), // CF
-    genUnit('blue', 2, 1, 9, 3), // RF
-    genUnit('blue', 5, 1,10, 3), // RB
-    genUnit('blue', 4, 1,11, 3)  // CB
+    genUnit('blue', 3, 1, 6, 3),
+    genUnit('blue', 0, 1, 7, 3),
+    genUnit('blue', 1, 1, 8, 3),
+    genUnit('blue', 2, 1, 9, 3),
+    genUnit('blue', 5, 1,10, 3),
+    genUnit('blue', 4, 1,11, 3)
   ];
-  // Rouge (ligne 25) : [LB, LF, CF, RF, RB, CB]
-  // LB: 25,6 | LF: 25,7 | CF: 25,8 | RF: 25,9 | RB: 25,10 | CB: 25,11
+  // Rouge (ligne 25) : LB (25,6), LF (25,7), CF (25,8), RF (25,9), RB (25,10), CB (25,11)
   const red = [
-    genUnit('red', 3, 25, 6, 0), // LB
-    genUnit('red', 0, 25, 7, 0), // LF
-    genUnit('red', 1, 25, 8, 0), // CF
-    genUnit('red', 2, 25, 9, 0), // RF
-    genUnit('red', 5, 25,10, 0), // RB
-    genUnit('red', 4, 25,11, 0)  // CB
+    genUnit('red', 3, 25, 6, 0),
+    genUnit('red', 0, 25, 7, 0),
+    genUnit('red', 1, 25, 8, 0),
+    genUnit('red', 2, 25, 9, 0),
+    genUnit('red', 5, 25,10, 0),
+    genUnit('red', 4, 25,11, 0)
   ];
+  // Fix breath for all units: toujours à maxHold au départ
+  [...blue, ...red].forEach(u => u.breath = u.stats.maxHold);
   return blue.concat(red);
 }
 
@@ -290,6 +290,14 @@ function drawUnit(unit) {
   ctx.restore();
 }
 
+// Nouvelle fonction pour dessiner les unités superposées (surface + fond sur la même case)
+function drawAllUnits() {
+  // D'abord les unités à la surface
+  for(const unit of units.filter(u=>u.atSurface)) drawUnit(unit);
+  // Puis les unités au fond (dessinées par-dessus)
+  for(const unit of units.filter(u=>!u.atSurface)) drawUnit(unit);
+}
+
 function drawPlanned(unit) {
   // Flèche selon action planifiée
   const {x, y} = hexToPixel(unit.row, unit.col);
@@ -390,7 +398,7 @@ function render() {
   drawBoard();
   drawPuck();
   for(const unit of units) drawPlanned(unit);
-  for(const unit of units) drawUnit(unit);
+  drawAllUnits(); // Remplacez la double boucle drawUnit par drawAllUnits
   renderTables();
 }
 
@@ -429,43 +437,54 @@ canvas.addEventListener('mouseleave', ()=>{
 let lastPossessor = null;
 let messageTimeout = null;
 document.getElementById('next-btn').onclick = function() {
-  // IA améliorée : évite le deadlock où tout le monde reste à la surface sans prendre le palet
+  // IA améliorée : alterne plongée entre ailes et centre, et permet de prendre le palet si libre
+  // Si deux joueurs veulent la même case, tirage au sort
 
+  // 1. Planification pour chaque unité
   const plannedPositions = {};
+  const contenders = {}; // clé: "row,col,atSurface" => [unit, ...]
   let puckHolder = puck.possessedBy;
   let blueGoal = {row:1, col:8}, redGoal = {row:25, col:8};
   let goal = puckHolder && puckHolder.team==='blue' ? redGoal : blueGoal;
 
-  // 1. Planification pour chaque unité
   for(const unit of units) {
     let targetRow = unit.row, targetCol = unit.col;
     let kickoff = (turn === 1);
     let isForward = (unit.name === 'LF' || unit.name === 'CF' || unit.name === 'RF');
+    let isWing = (unit.name === 'LF' || unit.name === 'RF');
+    let isCenter = (unit.name === 'CF');
+    let puckOnLeft = puck.col < 8;
+    let puckOnRight = puck.col > 8;
 
-    // --- Correction anti-deadlock ---
-    // Si le palet est libre et l'unité est à la surface, elle plonge pour aller le chercher
-    if(!puck.possessedBy && unit.atSurface && unit.row !== puck.row && unit.col !== puck.col) {
-      // Si pas déjà sur la case du palet, plonge
-      unit.atSurface = false;
+    // --- Correction anti-deadlock et alternance plongée ---
+    // Si le palet est libre et l'unité est à la surface, décide qui plonge selon la position du palet
+    if(!puck.possessedBy && unit.atSurface) {
+      // Si le puck est à gauche, LF plonge, à droite RF plonge, sinon CF plonge
+      if((puckOnLeft && unit.name === 'LF') ||
+         (puckOnRight && unit.name === 'RF') ||
+         (!puckOnLeft && !puckOnRight && unit.name === 'CF')) {
+        unit.atSurface = false;
+      }
     }
 
-    // Coup d'envoi : forwards plongent et foncent vers le centre
+    // Coup d'envoi : alterne plongée entre ailes et centre selon la position du puck
     if(kickoff && isForward) {
-      unit.atSurface = false;
+      if((puckOnLeft && unit.name === 'LF') ||
+         (puckOnRight && unit.name === 'RF') ||
+         (!puckOnLeft && !puckOnRight && unit.name === 'CF')) {
+        unit.atSurface = false;
+      }
       if(unit.row < 13) targetRow++;
       else if(unit.row > 13) targetRow--;
       if(unit.col < 8) targetCol++;
       else if(unit.col > 8) targetCol--;
     } else if(puckHolder === unit) {
-      // Portuer du puck : avance vers le but adverse
       if(unit.atSurface) {
-        // Un joueur à la surface ne peut pas posséder le palet, plonge automatiquement si possible
         unit.atSurface = false;
         unit.planned = { action: 'dive', to: {row:unit.row, col:unit.col}, dir:unit.facing };
         continue;
       }
       if(unit.breath < 4) {
-        // Cherche un coéquipier devant ou latéral pour flick
         let mates = units.filter(u=>u.team===unit.team && u!==unit && !u.atSurface);
         let best = null, bestScore = -Infinity;
         for(const mate of mates) {
@@ -478,7 +497,6 @@ document.getElementById('next-btn').onclick = function() {
           continue;
         }
       }
-      // Sinon, avance vers le but adverse
       if(unit.team==='blue') {
         if(unit.row < 25) targetRow++;
         if(unit.col < 8) targetCol++;
@@ -489,48 +507,65 @@ document.getElementById('next-btn').onclick = function() {
         else if(unit.col > 8) targetCol--;
       }
     } else if(puckHolder && unit.team === puckHolder.team) {
-      // Coéquipiers : se placent autour du porteur pour soutenir (formation)
       let rels = [
-        {dr:0,dc:-1}, // gauche
-        {dr:0,dc:1},  // droite
-        {dr:-1,dc:0}, // devant
-        {dr:1,dc:0},  // derrière
-        {dr:1,dc:1},  // arrière droite
-        {dr:1,dc:-1}, // arrière gauche
+        {dr:0,dc:-1}, {dr:0,dc:1}, {dr:-1,dc:0}, {dr:1,dc:0}, {dr:1,dc:1}, {dr:1,dc:-1},
       ];
       let idx = unit.idx % rels.length;
       let rel = rels[idx];
       let destRow = puckHolder.row + rel.dr;
       let destCol = puckHolder.col + rel.dc;
-      if(destRow>=1 && destRow<=25 && destCol>=1 && destCol<=15 &&
-         !units.some(u=>u!==unit && u.row===destRow && u.col===destCol)) {
-        targetRow = destRow;
-        targetCol = destCol;
+      if(destRow>=1 && destRow<=25 && destCol>=1 && destCol<=15) {
+        let occupied = units.some(u=>u!==unit && u.row===destRow && u.col===destCol && u.atSurface===unit.atSurface);
+        if(!occupied) {
+          targetRow = destRow;
+          targetCol = destCol;
+        }
       }
     } else if(puckHolder && unit.team !== puckHolder.team) {
-      // Adversaires : convergent vers le porteur pour tenter de le voler
       if(unit.row < puckHolder.row) targetRow++;
       else if(unit.row > puckHolder.row) targetRow--;
       if(unit.col < puckHolder.col) targetCol++;
       else if(unit.col > puckHolder.col) targetCol--;
     } else {
-      // Sinon, va vers le puck
-      if(unit.row < puck.row) targetRow++;
-      else if(unit.row > puck.row) targetRow--;
-      if(unit.col < puck.col) targetCol++;
-      else if(unit.col > puck.col) targetCol--;
+      // Si le palet est libre et l'unité est sous l'eau, va vers le palet
+      if(!unit.atSurface) {
+        if(unit.row < puck.row) targetRow++;
+        else if(unit.row > puck.row) targetRow--;
+        if(unit.col < puck.col) targetCol++;
+        else if(unit.col > puck.col) targetCol--;
+      }
     }
-    // Restriction: pas deux unités sur la même case/plan (vérifie aussi les plans opposés)
-    const key = `${targetRow},${targetCol}`;
-    if(!plannedPositions[key] && !units.some(u=>u!==unit && u.row===targetRow && u.col===targetCol)) {
-      plannedPositions[key] = unit.team+unit.idx;
-      unit.planned = { action: 'move', to: {row:targetRow, col:targetCol}, dir:unit.facing };
-    } else {
-      unit.planned = { action: 'move', to: {row:unit.row, col:unit.col}, dir:unit.facing };
-    }
+    // Autorise la superposition surface/fond : on interdit seulement deux unités sur le même plan
+    const key = `${targetRow},${targetCol},${unit.atSurface}`;
+    if (!contenders[key]) contenders[key] = [];
+    contenders[key].push(unit);
+    unit._desired = {row: targetRow, col: targetCol};
   }
 
-  // 2. Exécution des mouvements (en respectant les restrictions de croisement)
+  // 2. Tirage au sort pour chaque case convoitée
+  for (const key in contenders) {
+    const group = contenders[key];
+    if (group.length === 1) {
+      const u = group[0];
+      u.planned = { action: 'move', to: u._desired, dir: u.facing };
+      plannedPositions[key] = u.team+u.idx;
+    } else {
+      // Plusieurs unités veulent la même case/plan : tirage au sort
+      const winner = group[Math.floor(Math.random()*group.length)];
+      winner.planned = { action: 'move', to: winner._desired, dir: winner.facing };
+      plannedPositions[key] = winner.team+winner.idx;
+      // Les autres restent sur place
+      for (const u of group) {
+        if (u !== winner) {
+          u.planned = { action: 'move', to: {row:u.row, col:u.col}, dir:u.facing };
+        }
+      }
+    }
+  }
+  // Nettoyage
+  units.forEach(u => { delete u._desired; });
+
+  // 3. Exécution des mouvements (en respectant les restrictions de croisement)
   const newPositions = {};
   for(const unit of units) {
     const {row:fromRow, col:fromCol} = unit;
@@ -538,18 +573,18 @@ document.getElementById('next-btn').onclick = function() {
     const plane = unit.atSurface;
     const pathKey = `${fromRow},${fromCol},${toRow},${toCol},${plane}`;
     const reverseKey = `${toRow},${toCol},${fromRow},${fromCol},${plane}`;
-    // Interdiction stricte de finir sur la même case
+    // Interdiction stricte de finir sur la même case/plan (mais surface/fond autorisé)
     if(!newPositions[pathKey] && !newPositions[reverseKey] &&
-      !units.some(u=>u!==unit && u.row===toRow && u.col===toCol)) {
+      !units.some(u=>u!==unit && u.row===toRow && u.col===toCol && u.atSurface===unit.atSurface)) {
       newPositions[pathKey] = unit.team+unit.idx;
       unit.row = toRow;
       unit.col = toCol;
     }
-    // Gestion souffle
+    // Correction : ne jamais laisser breath < 0
     if(unit.atSurface) {
       unit.breath = Math.min(unit.breath+1, unit.stats.maxHold);
     } else {
-      unit.breath--;
+      unit.breath = Math.max(unit.breath-1, 0);
       if(unit.breath<=0) unit.atSurface = true;
     }
   }
