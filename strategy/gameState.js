@@ -10,20 +10,20 @@ const unitAcronyms = ['LF', 'CF', 'RF', 'LB', 'CB', 'RB'];
 const CENTER = { y: 13, x: 8 };
 
 const bluePositions = [
-  { name: "LB", row: 1, col: 6 },
-  { name: "LF", row: 1, col: 7 },
+  { name: "LB", row: 1, col: 10 },
+  { name: "LF", row: 1, col: 9 },
   { name: "CF", row: 1, col: 8 },
-  { name: "RF", row: 1, col: 9 },
-  { name: "RB", row: 1, col: 10 },
-  { name: "CB", row: 1, col: 11 }
+  { name: "RF", row: 1, col: 7 },
+  { name: "CB", row: 1, col: 6 },
+  { name: "RB", row: 1, col: 5 },
 ];
 const redPositions = [
-  { name: "LB", row: 25, col: 11 },
-  { name: "LF", row: 25, col: 10 },
+  { name: "LB", row: 25, col: 6 },
+  { name: "LF", row: 25, col: 7 },
   { name: "CF", row: 25, col: 8 },
-  { name: "RF", row: 25, col: 7 },
-  { name: "RB", row: 25, col: 6 },
-  { name: "CB", row: 25, col: 5 }
+  { name: "RF", row: 25, col: 9 },
+  { name: "CB", row: 25, col: 10 },
+  { name: "RB", row: 25, col: 11 },
 ];
 
 // État global du jeu

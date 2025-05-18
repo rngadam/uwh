@@ -19,8 +19,8 @@
     #left-panel {
       display: flex;
       flex-direction: column;
-      min-width: 260px;
-      max-width: 320px;
+      flex: 1 1 0;
+      min-width: 0;
       height: 100vh;
       overflow-y: auto;
       box-sizing: border-box;
@@ -29,7 +29,6 @@
       z-index: 2;
     }
     #main {
-      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -38,6 +37,10 @@
       overflow: hidden;
       background: #f0f4f8;
       min-width: 0;
+      justify-content: center;
+      width: 800px;
+      max-width: 800px;
+      flex: 0 0 800px;
     }
     #right-panel {
       min-width: 260px;
@@ -70,9 +73,29 @@
       min-width: 180px;
       font-size: 0.95em;
     }
-    canvas { background: #e0e7ef; border: 1px solid #888; }
-    #tables { margin-top:10px; display:flex; gap:10px; flex-direction:column; }
-    #tables table { border-collapse:collapse; font-size:0.95em; min-width:220px; background:#f8fafd; }
+    canvas {
+      background: #e0e7ef;
+      border: 1px solid #888;
+      display: block;
+      margin-left: 0;
+      margin-right: 0;
+    }
+    #tables {
+      margin-top:10px;
+      display:flex;
+      gap:10px;
+      flex-direction:column;
+      width: 100%;
+      overflow-x: auto;
+    }
+    #tables table {
+      border-collapse:collapse;
+      font-size:0.95em;
+      min-width:600px;
+      background:#f8fafd;
+      width: 100%;
+      table-layout: auto;
+    }
     #tables caption { font-weight:bold; padding:2px 0 4px 0; }
     #tables th, #tables td { padding:2px 6px; text-align:center; }
     #tables tr { border-bottom:1px solid #e0e0e0; }
@@ -121,12 +144,12 @@
     <div id="tables"></div>
   </div>
   <div id="main">
-    <canvas id="board" width="1100" height="900"></canvas>
-    <div id="hovercard"></div>
+    <canvas id="board" width="800" height="900"></c</div>anvas>
     <div id="message" style="position:absolute;left:10px;top:10px;z-index:20;font-size:1.1em;color:#222;background:#fffbe7;border:1px solid #e6c200;padding:8px 18px;border-radius:8px;display:none;box-shadow:2px 2px 8px #e6c200;"></div>
   </div>
   <div id="right-panel">
     <button id="next-btn">Next round</button>
+    <div id="tile-info" style="margin:12px 0 18px 0;min-height:80px;font-size:1.05em;"></div>
     <div id="history"></div>
   </div>
 </div>
