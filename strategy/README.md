@@ -197,3 +197,16 @@ if a player on their own team has the puck, the units move to place themselves r
 the pointy bit of the arrow should point in the direction the player is planning to go.
 
 to simplify visualization, lets make it that no players can end up in the same tile as other players.
+
+il faut ajuster la stratégie IA puisque ce que je vois, c'est LF prendre possession de la puck, faire une passe à LB et LB s'éloigner dans le  coin ligne 1 colonne 1.
+
+problèmes:
+
+- le but est de placer la puck dans le but adverse, donc ultimement l'équipe tente de progresser vers le but rouge
+- les autres coéquipiers et les joueurs adverse ne suivent pas le porteur de puck alors qu'ils devraient. les coéquipiers pour supporter celui-ci et les adversaires pour tenter de prendre possession de la puck
+
+un joueur à la surface ne peut pas posséder le palet.
+
+ajouter au tableau ce qui est planifier pour le prochain tour
+
+ajouter un historique de messages dans la colonne à droite de l'aire de jeu.
