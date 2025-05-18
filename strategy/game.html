@@ -351,12 +351,19 @@ function showMessage(msg) {
 }
 function updateHistory() {
   const hist = document.getElementById('history');
-  hist.innerHTML = "<b>Historique</b><br>" + messageHistory.map(m=>"<div>"+m+"</div>").join("");
+  // Correction : efface l'historique si vide, sinon affiche la liste
+  if (!messageHistory.length) {
+    hist.innerHTML = "<b>Historique</b><br><i>Aucun événement</i>";
+  } else {
+    hist.innerHTML = "<b>Historique</b><br>" + messageHistory.map(m=>"<div>"+m+"</div>").join("");
+  }
 }
 
 // Table de statut des unités
 function renderTables() {
   const tables = document.getElementById('tables');
+  // Ajout de l'affichage de la position du palet
+  let puckPos = `<div style="margin-bottom:8px;font-size:1.05em;"><b>Palet</b> : ${puck.row},${puck.col} ${puck.possessedBy ? `(${puck.possessedBy.team==='blue'?'Bleu':'Rouge'} ${puck.possessedBy.name})` : '(libre)'}</div>`;
   function makeTable(team) {
     let html = `<table border="1">
       <caption style="color:${team==='blue'?'#1976d2':'#d32f2f'};">${team==='blue'?'Bleu':'Rouge'}</caption>
@@ -376,7 +383,7 @@ function renderTables() {
     html += '</table>';
     return html;
   }
-  tables.innerHTML = makeTable('blue') + makeTable('red');
+  tables.innerHTML = puckPos + makeTable('blue') + makeTable('red');
 }
 
 function render() {
@@ -422,7 +429,8 @@ canvas.addEventListener('mouseleave', ()=>{
 let lastPossessor = null;
 let messageTimeout = null;
 document.getElementById('next-btn').onclick = function() {
-  // IA améliorée : porteur avance vers le but adverse, coéquipiers soutiennent, adversaires poursuivent
+  // IA améliorée : évite le deadlock où tout le monde reste à la surface sans prendre le palet
+
   const plannedPositions = {};
   let puckHolder = puck.possessedBy;
   let blueGoal = {row:1, col:8}, redGoal = {row:25, col:8};
@@ -433,6 +441,14 @@ document.getElementById('next-btn').onclick = function() {
     let targetRow = unit.row, targetCol = unit.col;
     let kickoff = (turn === 1);
     let isForward = (unit.name === 'LF' || unit.name === 'CF' || unit.name === 'RF');
+
+    // --- Correction anti-deadlock ---
+    // Si le palet est libre et l'unité est à la surface, elle plonge pour aller le chercher
+    if(!puck.possessedBy && unit.atSurface && unit.row !== puck.row && unit.col !== puck.col) {
+      // Si pas déjà sur la case du palet, plonge
+      unit.atSurface = false;
+    }
+
     // Coup d'envoi : forwards plongent et foncent vers le centre
     if(kickoff && isForward) {
       unit.atSurface = false;
@@ -443,8 +459,9 @@ document.getElementById('next-btn').onclick = function() {
     } else if(puckHolder === unit) {
       // Portuer du puck : avance vers le but adverse
       if(unit.atSurface) {
-        // Un joueur à la surface ne peut pas posséder le palet
-        unit.planned = { action: 'surface', to: {row:unit.row, col:unit.col}, dir:unit.facing };
+        // Un joueur à la surface ne peut pas posséder le palet, plonge automatiquement si possible
+        unit.atSurface = false;
+        unit.planned = { action: 'dive', to: {row:unit.row, col:unit.col}, dir:unit.facing };
         continue;
       }
       if(unit.breath < 4) {
@@ -452,7 +469,6 @@ document.getElementById('next-btn').onclick = function() {
         let mates = units.filter(u=>u.team===unit.team && u!==unit && !u.atSurface);
         let best = null, bestScore = -Infinity;
         for(const mate of mates) {
-          // Privilégie les coéquipiers plus proches du but adverse
           let progress = (unit.team==='blue' ? mate.row : -mate.row);
           let dist = Math.abs(mate.row-unit.row)+Math.abs(mate.col-unit.col);
           if(dist <= unit.stats.flick && progress > bestScore) { best = mate; bestScore = progress; }
@@ -486,7 +502,6 @@ document.getElementById('next-btn').onclick = function() {
       let rel = rels[idx];
       let destRow = puckHolder.row + rel.dr;
       let destCol = puckHolder.col + rel.dc;
-      // Si la case est libre, on y va, sinon on reste
       if(destRow>=1 && destRow<=25 && destCol>=1 && destCol<=15 &&
          !units.some(u=>u!==unit && u.row===destRow && u.col===destCol)) {
         targetRow = destRow;
