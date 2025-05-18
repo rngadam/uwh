@@ -91,10 +91,103 @@ document.addEventListener('DOMContentLoaded', function() {
   function nextTurn() {
     // Pour chaque unité, planifier l'action
     for (const u of units) {
-      // Si le joueur tient le puck, il avance vers le but adverse
+      // --- IA du porteur du puck ---
       if (puck.possessedBy === u) {
+        // 1. Privilégier la passe à un coéquipier au fond (flick en diagonale)
+        let flickDirs = [
+          {dr: 1, dc: 1}, {dr: 1, dc: -1}, {dr: -1, dc: 1}, {dr: -1, dc: -1}
+        ];
+        let teammates = units.filter(m => m.team === u.team && m !== u && !m.atSurface);
+        let flicked = false;
+        for (const dir of flickDirs) {
+          for (let dist = 1; dist <= u.stats.flick; dist++) {
+            let tr = u.row + dir.dr * dist, tc = u.col + dir.dc * dist;
+            if (tr < 1 || tr > 25 || tc < 1 || tc > 15) continue;
+            let mate = teammates.find(m => m.row === tr && m.col === tc);
+            if (mate) {
+              u.planned = { action: 'flick', to: { row: tr, col: tc }, dir: u.facing };
+              flicked = true;
+              break;
+            }
+          }
+          if (flicked) break;
+        }
+        if (flicked) continue;
+
+        // 2. Mouvement latéral/diagonal sans revenir sur une case récemment visitée, privilégier la direction initiale
+        if (typeof u.lastMoveDir !== 'number') u.lastMoveDir = null;
+        const directions = [
+          {dr: 0, dc: 1},   // droite
+          {dr: 0, dc: -1},  // gauche
+          {dr: 1, dc: 1},   // bas droite
+          {dr: 1, dc: -1},  // bas gauche
+          {dr: -1, dc: 1},  // haut droite
+          {dr: -1, dc: -1}  // haut gauche
+        ];
+        // On essaye d'abord de continuer dans la même direction si possible
+        let foundMove = false;
+        let moveDirs;
+        if (u.lastMoveDir !== null && u.lastMoveDir >= 0 && u.lastMoveDir < directions.length) {
+          moveDirs = [u.lastMoveDir, ...directions.map((_,i)=>i).filter(i=>i!==u.lastMoveDir)];
+        } else {
+          moveDirs = directions.map((_,i)=>i);
+        }
+        for (const dirIdx of moveDirs) {
+          const dir = directions[dirIdx];
+          let nr = u.row + dir.dr, nc = u.col + dir.dc;
+          if (nr < 1 || nr > 25 || nc < 1 || nc > 15) continue;
+          // Pas d'adversaire sur la case
+          let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
+          let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
+          // On évite de revenir sur la case précédente
+          if (u.prevRow === nr && u.prevCol === nc) continue;
+          if (!hasOpponent && !occupied) {
+            u.planned = { action: 'move', to: { row: nr, col: nc }, dir: u.facing };
+            u.lastMoveDir = dirIdx;
+            u.prevRow = u.row;
+            u.prevCol = u.col;
+            foundMove = true;
+            break;
+          }
+        }
+        if (foundMove) continue;
+
+        // 3. Si un adversaire est devant, tourner et passer derrière
+        let facingDir = u.facing;
+        let front = [
+          {dr: -1, dc: 0}, // 0: haut
+          {dr: -1, dc: 1}, // 1: haut droite
+          {dr: 0, dc: 1},  // 2: droite
+          {dr: 1, dc: 0},  // 3: bas
+          {dr: 1, dc: -1}, // 4: bas gauche
+          {dr: 0, dc: -1}  // 5: gauche
+        ][facingDir];
+        let fr = u.row + front.dr, fc = u.col + front.dc;
+        let oppInFront = units.some(op => op.team !== u.team && op.row === fr && op.col === fc && !op.atSurface);
+        if (oppInFront) {
+          // Cherche un coéquipier derrière
+          let backDir = (facingDir + 3) % 6;
+          let back = [
+            {dr: -1, dc: 0}, {dr: -1, dc: 1}, {dr: 0, dc: 1}, {dr: 1, dc: 0}, {dr: 1, dc: -1}, {dr: 0, dc: -1}
+          ][backDir];
+          let br = u.row + back.dr, bc = u.col + back.dc;
+          let mate = teammates.find(m => m.row === br && m.col === bc);
+          if (mate) {
+            u.planned = { action: 'rotate', to: { row: u.row, col: u.col }, dir: backDir };
+            u.planned = { action: 'flick', to: { row: br, col: bc }, dir: backDir };
+            continue;
+          } else {
+            u.planned = { action: 'rotate', to: { row: u.row, col: u.col }, dir: backDir };
+            continue;
+          }
+        }
+
+        // 4. Sinon, avancer vers le but adverse
         let targetRow = u.row + (u.team === 'blue' ? 1 : -1);
         u.planned = { action: 'move', to: { row: Math.max(1, Math.min(25, targetRow)), col: u.col }, dir: u.facing };
+        u.lastMoveDir = null;
+        u.prevRow = u.row;
+        u.prevCol = u.col;
         continue;
       }
 
