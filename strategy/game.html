@@ -35,8 +35,8 @@
   </style>
 </head>
 <body>
-<div id="container">
-  <div id="left-panel">
+<div id="container" style="flex-direction:row;max-width:none;">
+  <div id="left-panel" style="display:flex;flex-direction:column;min-width:250px;">
     <div id="scoreboard">
       <b>Score</b><br>
       <span style="color:#1976d2">Bleu</span>: <span id="score-blue">0</span><br>
@@ -56,12 +56,12 @@
       <span style="border-bottom:3px solid #8e24aa; width:24px; height:0;"></span> Flèche: Rotation<br>
       <span style="border-bottom:3px solid #c62828; width:24px; height:0;"></span> Flèche: Steal<br>
     </div>
+    <div id="tables" style="margin-top:30px;display:flex;flex-direction:column;gap:18px;"></div>
   </div>
-  <div id="main">
+  <div id="main" style="flex:1;display:flex;flex-direction:column;">
     <canvas id="board" width="720" height="900" style="max-width:100%;height:auto;"></canvas>
     <div id="hovercard"></div>
     <div id="message" style="position:absolute;left:10px;top:10px;z-index:20;font-size:1.1em;color:#222;background:#fffbe7;border:1px solid #e6c200;padding:8px 18px;border-radius:8px;display:none;box-shadow:2px 2px 8px #e6c200;"></div>
-    <div id="tables"></div>
   </div>
 </div>
 <script>
