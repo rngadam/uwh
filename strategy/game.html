@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>UWH - Jeu de stratégie au tour par tour</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; }
+    #container { display: flex; flex-direction: row; max-width:1200px; margin:auto; }
+    #left-panel { width: 250px; padding: 20px; background: #fff; border-right: 1px solid #ccc; }
+    #main { flex: 1; padding: 20px; position:relative; }
+    #scoreboard { font-size: 1.2em; margin-bottom: 20px; }
+    #turn { margin-bottom: 20px; }
+    #legend { margin-top: 30px; font-size: 0.95em; }
+    #legend span { display: inline-block; width: 18px; height: 18px; margin-right: 6px; vertical-align: middle; }
+    #next-btn { margin-top: 20px; padding: 10px 20px; font-size: 1em; }
+    #hovercard {
+      display: none;
+      position: absolute;
+      background: #fff;
+      border: 1px solid #888;
+      border-radius: 6px;
+      box-shadow: 2px 2px 8px #aaa;
+      padding: 12px;
+      z-index: 10;
+      min-width: 180px;
+      font-size: 0.95em;
+    }
+    canvas { background: #e0e7ef; border: 1px solid #888; }
+    #tables { margin-top:20px; display:flex; gap:30px; }
+    #tables table { border-collapse:collapse; font-size:0.95em; min-width:220px; background:#f8fafd; }
+    #tables caption { font-weight:bold; padding:2px 0 4px 0; }
+    #tables th, #tables td { padding:2px 6px; text-align:center; }
+    #tables tr { border-bottom:1px solid #e0e0e0; }
+    #tables tr:first-child th { background:#e3eaf3; }
+  </style>
+</head>
+<body>
+<div id="container">
+  <div id="left-panel">
+    <div id="scoreboard">
+      <b>Score</b><br>
+      <span style="color:#1976d2">Bleu</span>: <span id="score-blue">0</span><br>
+      <span style="color:#d32f2f">Rouge</span>: <span id="score-red">0</span>
+    </div>
+    <div id="turn">Tour: <span id="turn-num">1</span></div>
+    <button id="next-btn">Tour suivant</button>
+    <div id="legend">
+      <b>Légende</b><br>
+      <span style="background:#1976d2"></span> Unité bleue (surface)<br>
+      <span style="background:#90caf9"></span> Unité bleue (fond)<br>
+      <span style="background:#d32f2f"></span> Unité rouge (surface)<br>
+      <span style="background:#ffcdd2"></span> Unité rouge (fond)<br>
+      <span style="background:#ffeb3b; border-radius:50%"></span> Palet<br>
+      <span style="border-bottom:3px solid #43a047; width:24px; height:0;"></span> Flèche: Mouvement<br>
+      <span style="border-bottom:3px solid #fbc02d; width:24px; height:0;"></span> Flèche: Flick<br>
+      <span style="border-bottom:3px solid #8e24aa; width:24px; height:0;"></span> Flèche: Rotation<br>
+      <span style="border-bottom:3px solid #c62828; width:24px; height:0;"></span> Flèche: Steal<br>
+    </div>
+  </div>
+  <div id="main">
+    <canvas id="board" width="720" height="900" style="max-width:100%;height:auto;"></canvas>
+    <div id="hovercard"></div>
+    <div id="message" style="position:absolute;left:10px;top:10px;z-index:20;font-size:1.1em;color:#222;background:#fffbe7;border:1px solid #e6c200;padding:8px 18px;border-radius:8px;display:none;box-shadow:2px 2px 8px #e6c200;"></div>
+    <div id="tables"></div>
+  </div>
+</div>
+<script>
+// --- Paramètres du plateau ---
+const ROWS = 25, COLS = 15;
+const HEX_SIZE = 22; // rayon du cercle inscrit (plus petit pour tenir sur l'écran)
+const HEX_H = Math.sqrt(3) * HEX_SIZE;
+const BOARD_OFFSET_X = 40, BOARD_OFFSET_Y = 30;
+
+// --- Données des équipes et unités ---
+const TEAM_BLUE = 'blue';
+const TEAM_RED = 'red';
+const unitAcronyms = ['LF', 'CF', 'RF', 'LB', 'CB', 'RB'];
+// Ajout de la constante CENTER pour la compatibilité avec le code
+const CENTER = { y: 13, x: 8 };
+
+function randomStat(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randomProb(min, max) { return Math.round((Math.random() * (max - min) + min) * 10) / 10; }
+function randomTurnSpeed() { return [1/3, 2/3, 1][Math.floor(Math.random()*3)]; }
+
+function genUnit(team, idx, row, col, facing) {
+  return {
+    team, idx, name: unitAcronyms[idx],
+    row, col, facing, // direction: 0-5 (hex)
+    atSurface: true,
+    breath: 20,
+    stats: {
+      recovery: randomStat(1,5),
+      maxHold: randomStat(15,25),
+      swim: randomStat(1,3),
+      steal: randomProb(0.1,0.8),
+      flick: randomStat(1,3),
+      turn: randomTurnSpeed()
+    },
+    planned: { action: 'move', to: {row, col}, dir: facing }
+  };
+}
+
+// Positions initiales (voir README)
+function getInitialUnits() {
+  // Bleu (ligne 1) : [LB, LF, CF, RF, RB, CB]
+  // LB: 1,6 | LF: 1,7 | CF: 1,8 | RF: 1,9 | RB: 1,10 | CB: 1,11
+  const blue = [
+    genUnit('blue', 3, 1, 6, 3), // LB
+    genUnit('blue', 0, 1, 7, 3), // LF
+    genUnit('blue', 1, 1, 8, 3), // CF
+    genUnit('blue', 2, 1, 9, 3), // RF
+    genUnit('blue', 5, 1,10, 3), // RB
+    genUnit('blue', 4, 1,11, 3)  // CB
+  ];
+  // Rouge (ligne 25) : [LB, LF, CF, RF, RB, CB]
+  // LB: 25,6 | LF: 25,7 | CF: 25,8 | RF: 25,9 | RB: 25,10 | CB: 25,11
+  const red = [
+    genUnit('red', 3, 25, 6, 0), // LB
+    genUnit('red', 0, 25, 7, 0), // LF
+    genUnit('red', 1, 25, 8, 0), // CF
+    genUnit('red', 2, 25, 9, 0), // RF
+    genUnit('red', 5, 25,10, 0), // RB
+    genUnit('red', 4, 25,11, 0)  // CB
+  ];
+  return blue.concat(red);
+}
+
+let units = getInitialUnits();
+let puck = { row: 13, col: 8, possessedBy: null };
+let score = { blue: 0, red: 0 };
+let turn = 1;
+
+// --- Affichage du plateau ---
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+
+function hexToPixel(row, col) {
+  // Décalage en quinconce
+  const x = BOARD_OFFSET_X + col * HEX_H + (row%2 ? HEX_H/2 : 0);
+  const y = BOARD_OFFSET_Y + row * (HEX_SIZE * 1.5);
+  return {x, y};
+}
+
+function drawHex(x, y, color, fill=true) {
+  ctx.save();
+  ctx.beginPath();
+  for(let i=0;i<6;i++) {
+    const angle = Math.PI/3 * i - Math.PI/6;
+    const px = x + HEX_SIZE * Math.cos(angle);
+    const py = y + HEX_SIZE * Math.sin(angle);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+  if(fill) {
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.13;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBoard() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Grille
+  for(let r=1;r<=ROWS;r++) for(let c=1;c<=COLS;c++) {
+    drawHex(...Object.values(hexToPixel(r,c)), '#1976d2');
+  }
+  // Zones de but
+  for(let c=7;c<=9;c++) {
+    drawHex(...Object.values(hexToPixel(1,c)), '#1976d2', false);
+    drawHex(...Object.values(hexToPixel(25,c)), '#d32f2f', false);
+  }
+}
+
+function drawPuck() {
+  const {x, y} = hexToPixel(puck.row, puck.col);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 13, 0, 2*Math.PI);
+  ctx.fillStyle = '#ffeb3b';
+  ctx.shadowColor = '#bfa600';
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawUnit(unit) {
+  const {x, y} = hexToPixel(unit.row, unit.col);
+  ctx.save();
+  // Couleur selon équipe et profondeur
+  let color, border;
+  if(unit.team==='blue') {
+    color = unit.atSurface ? '#1976d2' : '#90caf9';
+    border = '#0d47a1';
+  } else {
+    color = unit.atSurface ? '#d32f2f' : '#ffcdd2';
+    border = '#b71c1c';
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, 20, 0, 2*Math.PI);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = unit.atSurface ? 1 : 0.7;
+  ctx.shadowColor = unit.atSurface ? '#222' : '#fff';
+  ctx.shadowBlur = unit.atSurface ? 8 : 0;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = border;
+  ctx.stroke();
+  // Indicateur de possession du palet
+  if(puck.possessedBy === unit) {
+    ctx.beginPath();
+    ctx.arc(x, y, 26, 0, 2*Math.PI);
+    ctx.strokeStyle = '#ffeb3b';
+    ctx.lineWidth = 5;
+    ctx.globalAlpha = 0.7;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // Direction (petit triangle)
+  const angle = Math.PI/3 * unit.facing - Math.PI/2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + 24*Math.cos(angle-0.18), y + 24*Math.sin(angle-0.18));
+  ctx.lineTo(x + 24*Math.cos(angle+0.18), y + 24*Math.sin(angle+0.18));
+  ctx.closePath();
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.7;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // Acronyme + souffle
+  ctx.font = 'bold 13px Arial';
+  ctx.fillStyle = '#222';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(unit.name, x, y-2);
+  ctx.font = '11px Arial';
+  ctx.fillStyle = '#444';
+  ctx.fillText(unit.breath, x, y+13);
+  ctx.restore();
+}
+
+function drawPlanned(unit) {
+  // Flèche selon action planifiée
+  const {x, y} = hexToPixel(unit.row, unit.col);
+  let tx, ty, color;
+  if(unit.planned.action==='move') {
+    ({x:tx, y:ty} = hexToPixel(unit.planned.to.row, unit.planned.to.col));
+    color = '#43a047';
+  } else if(unit.planned.action==='flick') {
+    ({x:tx, y:ty} = hexToPixel(unit.planned.to.row, unit.planned.to.col));
+    color = '#fbc02d';
+  } else if(unit.planned.action==='rotate') {
+    const angle = Math.PI/3 * unit.planned.dir - Math.PI/2;
+    tx = x + 36*Math.cos(angle);
+    ty = y + 36*Math.sin(angle);
+    color = '#8e24aa';
+  } else if(unit.planned.action==='steal') {
+    ({x:tx, y:ty} = hexToPixel(unit.planned.to.row, unit.planned.to.col));
+    color = '#c62828';
+  } else return;
+  // Flèche part du bord du hexagone source vers le centre de la destination
+  let dx = tx - x, dy = ty - y;
+  let dist = Math.sqrt(dx*dx + dy*dy);
+  let startX = x + (dx/dist)*20;
+  let startY = y + (dy/dist)*20;
+  drawArrow(startX, startY, tx, ty, color);
+}
+
+function drawArrow(x1, y1, x2, y2, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  // Tête de flèche
+  const angle = Math.atan2(y2-y1, x2-x1);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2-12*Math.cos(angle-0.4), y2-12*Math.sin(angle-0.4));
+  ctx.lineTo(x2-12*Math.cos(angle+0.4), y2-12*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+// Table de statut des unités
+function renderTables() {
+  const tables = document.getElementById('tables');
+  function makeTable(team) {
+    let html = `<table border="1">
+      <caption style="color:${team==='blue'?'#1976d2':'#d32f2f'};">${team==='blue'?'Bleu':'Rouge'}</caption>
+      <tr><th>Nom</th><th>Pos</th><th>État</th><th>Souffle</th><th>Palet</th></tr>`;
+    for(const u of units.filter(u=>u.team===team)) {
+      html += `<tr>
+        <td>${u.name}</td>
+        <td>${u.row},${u.col}</td>
+        <td>${u.atSurface?'Surface':'Fond'}</td>
+        <td>${u.breath}</td>
+        <td>${puck.possessedBy===u?'🟡':''}</td>
+      </tr>`;
+    }
+    html += '</table>';
+    return html;
+  }
+  tables.innerHTML = makeTable('blue') + makeTable('red');
+}
+
+function render() {
+  drawBoard();
+  drawPuck();
+  for(const unit of units) drawPlanned(unit);
+  for(const unit of units) drawUnit(unit);
+  renderTables();
+}
+
+// --- Hovercard stats ---
+canvas.addEventListener('mousemove', function(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let found = null;
+  for(const unit of units) {
+    const {x, y} = hexToPixel(unit.row, unit.col);
+    if(Math.hypot(mx-x, my-y) < 22) { found = unit; break; }
+  }
+  const hover = document.getElementById('hovercard');
+  if(found) {
+    hover.style.display = 'block';
+    hover.style.left = (e.clientX+16)+'px';
+    hover.style.top = (e.clientY-8)+'px';
+    hover.innerHTML = `<b>${found.team==='blue'?'Bleu':'Rouge'} #${found.idx+1} - ${found.name}</b><br>
+      <b>Récupération:</b> ${found.stats.recovery}<br>
+      <b>Apnée max:</b> ${found.stats.maxHold}<br>
+      <b>Vitesse nage:</b> ${found.stats.swim}<br>
+      <b>Force vol:</b> ${Math.round(found.stats.steal*100)}%<br>
+      <b>Flick:</b> ${found.stats.flick}<br>
+      <b>Vitesse rotation:</b> ${found.stats.turn}<br>
+      <b>État:</b> ${found.atSurface?'Surface':'Fond'}<br>
+      <b>Souffle:</b> ${found.breath}`;
+  } else {
+    hover.style.display = 'none';
+  }
+});
+canvas.addEventListener('mouseleave', ()=>{
+  document.getElementById('hovercard').style.display = 'none';
+});
+
+// --- Tour suivant (simulation simple) ---
+let lastPossessor = null;
+let messageTimeout = null;
+function showMessage(msg) {
+  const el = document.getElementById('message');
+  el.textContent = msg;
+  el.style.display = 'block';
+  if(messageTimeout) clearTimeout(messageTimeout);
+  messageTimeout = setTimeout(()=>{el.style.display='none';}, 2200);
+}
+
+document.getElementById('next-btn').onclick = function() {
+  // IA simple :
+  // - Si une unité possède le palet, elle s'éloigne des adversaires, sinon va vers le palet
+  // - Si souffle bas, tente une passe (flick) à un coéquipier
+  const plannedPositions = {};
+  let puckHolder = puck.possessedBy;
+  for(const unit of units) {
+    let targetRow = unit.row, targetCol = unit.col;
+    let kickoff = (turn === 1);
+    let isForward = (unit.name === 'LF' || unit.name === 'CF' || unit.name === 'RF');
+    // Coup d'envoi : LF, CF, RF plongent et foncent vers le palet
+    if(kickoff && isForward) {
+      unit.atSurface = false;
+      if(unit.row < 13) targetRow++;
+      else if(unit.row > 13) targetRow--;
+      if(unit.col < 8) targetCol++;
+      else if(unit.col > 8) targetCol--;
+    } else if(puckHolder === unit) {
+      // Si souffle bas, tente une passe (flick) à un coéquipier proche
+      if(unit.breath < 4) {
+        // Cherche un coéquipier à portée de flick
+        let mates = units.filter(u=>u.team===unit.team && u!==unit);
+        let best = null, bestDist = 99;
+        for(const mate of mates) {
+          let d = Math.abs(mate.row-unit.row)+Math.abs(mate.col-unit.col);
+          if(d <= unit.stats.flick && d < bestDist) { best = mate; bestDist = d; }
+        }
+        if(best) {
+          unit.planned = { action: 'flick', to: {row:best.row, col:best.col}, dir:unit.facing };
+          continue;
+        }
+      }
+      // Sinon, essaie de s'éloigner des adversaires
+      let enemies = units.filter(u=>u.team!==unit.team);
+      let away = {row:unit.row, col:unit.col};
+      let maxDist = -1;
+      for(const dr of [-1,0,1]) for(const dc of [-1,0,1]) {
+        if(dr===0&&dc===0) continue;
+        let nr=unit.row+dr, nc=unit.col+dc;
+        let minDist = Math.min(...enemies.map(e=>Math.abs(e.row-nr)+Math.abs(e.col-nc)));
+        if(minDist>maxDist && nr>=1&&nr<=25&&nc>=1&&nc<=15) { maxDist=minDist; away={row:nr,col:nc}; }
+      }
+      targetRow = away.row; targetCol = away.col;
+    } else {
+      // Sinon, va vers le palet
+      if(unit.row < puck.row) targetRow++;
+      else if(unit.row > puck.row) targetRow--;
+      if(unit.col < puck.col) targetCol++;
+      else if(unit.col > puck.col) targetCol--;
+    }
+    // Restriction: pas deux unités sur la même case/plan
+    const key = `${targetRow},${targetCol},${unit.atSurface}`;
+    if(!plannedPositions[key]) {
+      plannedPositions[key] = unit.team+unit.idx;
+      unit.planned = { action: 'move', to: {row:targetRow, col:targetCol}, dir:unit.facing };
+    } else {
+      unit.planned = { action: 'move', to: {row:unit.row, col:unit.col}, dir:unit.facing };
+    }
+  }
+  // 2. Exécution des mouvements (en respectant les restrictions de croisement)
+  const newPositions = {};
+  for(const unit of units) {
+    const {row:fromRow, col:fromCol} = unit;
+    const {row:toRow, col:toCol} = unit.planned.to;
+    const plane = unit.atSurface;
+    const pathKey = `${fromRow},${fromCol},${toRow},${toCol},${plane}`;
+    const reverseKey = `${toRow},${toCol},${fromRow},${fromCol},${plane}`;
+    if(!newPositions[pathKey] && !newPositions[reverseKey]) {
+      newPositions[pathKey] = unit.team+unit.idx;
+      unit.row = toRow;
+      unit.col = toCol;
+    }
+    // Gestion souffle
+    if(unit.atSurface) {
+      unit.breath = Math.min(unit.breath+1, unit.stats.maxHold);
+    } else {
+      unit.breath--;
+      if(unit.breath<=0) unit.atSurface = true;
+    }
+  }
+  // Palet: gestion de la possession et messages
+  let prevPossessor = puck.possessedBy;
+  let poss = units.find(u=>u.row===puck.row && u.col===puck.col);
+  // Ne pas voler le palet à un coéquipier
+  if(poss && prevPossessor && prevPossessor!==poss && prevPossessor.team!==poss.team) {
+    showMessage(`${poss.team==='blue'?'Bleu':'Rouge'} ${poss.name} vole le palet à ${prevPossessor.team==='blue'?'Bleu':'Rouge'} ${prevPossessor.name}`);
+    puck.possessedBy = poss;
+  } else if(poss && !prevPossessor) {
+    showMessage(`${poss.team==='blue'?'Bleu':'Rouge'} ${poss.name} prend le palet libre`);
+    puck.possessedBy = poss;
+  } else if(poss && prevPossessor && prevPossessor!==poss && prevPossessor.team===poss.team) {
+    // Même équipe, ne vole pas
+    puck.possessedBy = prevPossessor;
+  } else {
+    puck.possessedBy = poss ? poss : null;
+  }
+  // Score si palet dans but
+  if(puck.row===1 && puck.col>=7 && puck.col<=9) {
+    score.blue++;
+    resetPositions();
+  } else if(puck.row===25 && puck.col>=7 && puck.col<=9) {
+    score.red++;
+    resetPositions();
+  }
+  turn++;
+  updateUI();
+  render();
+};
+
+function resetPositions() {
+  units = getInitialUnits();
+  puck = { row: 13, col: 8, possessedBy: null };
+}
+
+function updateUI() {
+  document.getElementById('score-blue').textContent = score.blue;
+  document.getElementById('score-red').textContent = score.red;
+  document.getElementById('turn-num').textContent = turn;
+}
+
+// --- Initialisation ---
+updateUI();
+render();
+/* --- Placement initial strict selon README --- */
+function makeTeam(team) {
+  // Placement exact selon le schéma du README
+  let positions = team===TEAM_BLUE
+    ? [
+        {acronym:"LF", name:"left forward", y:1, x:11, dir:1},
+        {acronym:"CF", name:"center forward", y:1, x:8, dir:1},
+        {acronym:"RF", name:"right forward", y:1, x:6, dir:1},
+        {acronym:"LB", name:"left back", y:1, x:12, dir:1},
+        {acronym:"CB", name:"center back", y:1, x:5, dir:1},
+        {acronym:"RB", name:"right back", y:1, x:9, dir:1},
+      ]
+    : [
+        {acronym:"LF", name:"left forward", y:25, x:4, dir:4},
+        {acronym:"CF", name:"center forward", y:25, x:8, dir:4},
+        {acronym:"RF", name:"right forward", y:25, x:12, dir:4},
+        {acronym:"LB", name:"left back", y:25, x:3, dir:4},
+        {acronym:"CB", name:"center back", y:25, x:11, dir:4},
+        {acronym:"RB", name:"right back", y:25, x:6, dir:4},
+      ];
+  let units = [];
+  for(let i=0;i<6;i++) {
+    let p = positions[i];
+    units.push({
+      id:team[0]+(i+1),
+      team, idx:i,
+      acronym: p.acronym,
+      name: p.name,
+      y:p.y, x:p.x,
+      stats: randomStats(),
+      breath: p.underwater?0:Math.floor(Math.random()*5)+1,
+      underwater: i<3, // Forwards plongent au kick-off
+      dir: p.dir,
+      hasPuck: false,
+      planned: null,
+      msg: "",
+    });
+  }
+  return units;
+}
+let state = {
+  blue: makeTeam(TEAM_BLUE),
+  red: makeTeam(TEAM_RED),
+  puck: {y:CENTER.y, x:CENTER.x, heldBy:null},
+  turn: 1,
+  score: {blue:0, red:0},
+  msg: "",
+  winner: null,
+};
+// Ajoutez cette fonction utilitaire pour la compatibilité avec makeTeam
+function randomStats() {
+  return {
+    recovery: randomStat(1,5),
+    maxBreath: randomStat(15,25),
+    swim: randomStat(1,3),
+    steal: Math.floor(randomProb(0.1,0.8)*100),
+    flick: randomStat(1,3),
+    turn: randomTurnSpeed()
+  };
+}
+/* --- Correction : flèche du bord du hex vers centre destination --- */
+function drawArrow(u) {
+  // Vérifie que u.planned et u.planned.to existent
+  if (!u.planned || !u.planned.to) return;
+  let {x: px, y: py} = hexToPixel(u.row, u.col);
+  let {x: tx, y: ty} = hexToPixel(u.planned.to.row, u.planned.to.col);
+  let angle = Math.atan2(ty-py, tx-px);
+  let sx = px + Math.cos(angle)*HEX_SIZE*0.9;
+  let sy = py + Math.sin(angle)*HEX_SIZE*0.9;
+  let ex = tx, ey = ty;
+  let color = "#43a047", dash = [];
+  if(u.planned.action==="move") color="#43a047";
+  else if(u.planned.action==="flick") color="#fbc02d";
+  else if(u.planned.action==="rotate") color="#8e24aa";
+  else if(u.planned.action==="steal") color="#c62828";
+  // ...début...
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(sx,sy);
+  ctx.lineTo(ex,ey);
+  ctx.strokeStyle=color;
+  ctx.lineWidth=4;
+  if(dash.length) ctx.setLineDash(dash);
+  ctx.stroke();
+  // Pointe de flèche
+  ctx.beginPath();
+  ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-12*Math.cos(angle-0.4),ey-12*Math.sin(angle-0.4));
+  ctx.lineTo(ex-12*Math.cos(angle+0.4),ey-12*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle=color;
+  ctx.fill();
+  ctx.restore();
+}
+/* --- Correction : planification IA stricte, pas de croisement ni chevauchement --- */
+function planAI() {
+  let allUnits = getAllUnits();
+  let puckHolder = getPuckHolder();
+  let puckPos = state.puck.heldBy ? puckHolder : state.puck;
+  let plannedTiles = {};
+  // Pour chaque équipe
+  for(let team of [TEAM_BLUE,TEAM_RED]) {
+    let units = getTeamUnits(team);
+    let opp = getOpponentUnits(team);
+    // Alignement après kick-off
+    let alignTo = puckHolder ? puckHolder : {y:CENTER.y,x:CENTER.x};
+    // Générer les destinations relatives
+    let relPos = [
+      {dy:0,dx:-1}, // LF gauche
+      {dy:-1,dx:0}, // CF devant
+      {dy:0,dx:1},  // RF droite
+      {dy:1,dx:-1}, // LB arrière gauche
+      {dy:1,dx:0},  // CB arrière
+      {dy:1,dx:1},  // RB arrière droite
+    ];
+    // Si kickoff, forwards plongent et foncent vers le puck
+    if(state.turn===1) {
+      for(let i=0;i<6;i++) {
+        let u = units[i];
+        if(i<3) { // Forwards plongent et foncent
+          if(!u.underwater) {
+            u.planned = {action:"dive",to:{y:u.y,x:u.x}};
+          } else {
+            let path = pathTo(u,CENTER,plannedTiles);
+            let step = path[1]||{y:u.y,x:u.x};
+            if(!plannedTiles[step.y+","+step.x] && !tileOccupied(step.y,step.x,u.id)) {
+              u.planned = {action:"move",to:step};
+              plannedTiles[step.y+","+step.x]=u.id;
+            } else {
+              u.planned = {action:"wait",to:{y:u.y,x:u.x}};
+            }
+          }
+        } else {
+          u.planned = {action:"wait",to:{y:u.y,x:u.x}};
+        }
+      }
+      continue;
+    }
+    // Si équipe a le puck
+    if(puckHolder && puckHolder.team===team) {
+      for(let i=0;i<6;i++) {
+        let u = units[i];
+        if(u.hasPuck) {
+          // Si souffle bas, flick vers un coéquipier
+          if(u.breath<3||u.stats.flick>1) {
+            let mate = units.find(m=>m!==u&&!tileOccupied(m.y,m.x)&&!plannedTiles[m.y+","+m.x]);
+            if(mate) {
+              u.planned = {action:"flick",to:{y:mate.y,x:mate.x}};
+              plannedTiles[mate.y+","+mate.x]=u.id;
+            } else {
+              let step = advanceTowardGoal(u,plannedTiles);
+              u.planned = {action:"move",to:step};
+              plannedTiles[step.y+","+step.x]=u.id;
+            }
+          } else {
+            let step = advanceTowardGoal(u,plannedTiles);
+            u.planned = {action:"move",to:step};
+            plannedTiles[step.y+","+step.x]=u.id;
+          }
+        } else {
+          // Les autres se placent autour du porteur
+          let rel = relPos[i];
+          let dest = {y:puckHolder.y+rel.dy, x:puckHolder.x+rel.dx};
+          if(inBounds(dest.y,dest.x)&&!tileOccupied(dest.y,dest.x)&&!plannedTiles[dest.y+","+dest.x]) {
+            u.planned = {action:"move",to:dest};
+            plannedTiles[dest.y+","+dest.x]=u.id;
+          } else {
+            u.planned = {action:"wait",to:{y:u.y,x:u.x}};
+          }
+        }
+      }
+    } else {
+      // Sinon, tous foncent vers le puck
+      for(let i=0;i<6;i++) {
+        let u = units[i];
+        if(u.underwater) {
+          let path = pathTo(u,puckPos,plannedTiles);
+          let step = path[1]||{y:u.y,x:u.x};
+          if(!plannedTiles[step.y+","+step.x] && !tileOccupied(step.y,step.x,u.id)) {
+            u.planned = {action:"move",to:step};
+            plannedTiles[step.y+","+step.x]=u.id;
+          } else {
+            u.planned = {action:"wait",to:{y:u.y,x:u.x}};
+          }
+        } else {
+          u.planned = {action:"dive",to:{y:u.y,x:u.x}};
+        }
+      }
+    }
+  }
+}
+/* --- Correction : pathTo interdit croisement sur même plan et destination déjà planifiée --- */
+function pathTo(u,target,plannedTiles) {
+  let queue = [[u.y,u.x,[]]], seen = {};
+  while(queue.length) {
+    let [y,x,path] = queue.shift();
+    let key = y+","+x;
+    if(seen[key]) continue;
+    seen[key]=1;
+    if(y===target.y&&x===target.x) return [ {y:u.y,x:u.x}, ...path ];
+    for(let d=0;d<6;d++) {
+      let nb = getNeighbor(y,x,d);
+      if(!inBounds(nb.y,nb.x)) continue;
+      if(tileOccupiedSamePlane(nb.y,nb.x,u.underwater,u.id)) continue;
+      if(plannedTiles && plannedTiles[nb.y+","+nb.x]) continue;
+      queue.push([nb.y,nb.x,[...path,{y:nb.y,x:nb.x}]]);
+    }
+  }
+  return [ {y:u.y,x:u.x} ];
+}
+/* --- Correction : advanceTowardGoal prend en compte les tuiles déjà planifiées --- */
+function advanceTowardGoal(u,plannedTiles) {
+  let goal = u.team===TEAM_BLUE?GOAL_RED[1]:GOAL_BLUE[1];
+  let path = pathTo(u,goal,plannedTiles);
+  return path[1]||{y:u.y,x:u.x};
+}
+/* --- Correction : exécution du tour, pas de vol entre coéquipiers --- */
+function executeTurn() {
+  let allUnits = getAllUnits();
+  let plannedTiles = {};
+  // 1. Résoudre les actions
+  for(let u of allUnits) {
+    let act = u.planned;
+    if(!act) continue;
+    if(act.action==="move") {
+      let key = act.to.y+","+act.to.x;
+      if(!plannedTiles[key] && !tileOccupied(act.to.y,act.to.x,u.id)) {
+        plannedTiles[key]=u.id;
+        u.y = act.to.y; u.x = act.to.x;
+      }
+    } else if(act.action==="dive") {
+      if(!u.underwater) { u.underwater=true; }
+    } else if(act.action==="surface") {
+      if(u.underwater) { u.underwater=false; }
+    } else if(act.action==="flick") {
+      if(u.hasPuck) {
+        let mate = getAllUnits().find(m=>m.team===u.team&&!m.hasPuck&&isSameTile(m,act.to));
+        if(mate) {
+          mate.hasPuck=true; state.puck.heldBy=mate.id;
+          u.hasPuck=false;
+          state.msg = `${u.team==="blue"?"🔵":"🔴"} ${u.acronym} fait une passe à ${mate.acronym}`;
+        }
+      }
+    } else if(act.action==="steal") {
+      let opp = getOpponentUnits(u.team).find(o=>isSameTile(o,act.to)&&o.hasPuck);
+      if(opp && Math.random()*100<u.stats.steal) {
+        opp.hasPuck=false; u.hasPuck=true; state.puck.heldBy=u.id;
+        state.msg = `${u.team==="blue"?"🔵":"🔴"} ${u.acronym} vole le puck à ${opp.acronym}`;
+      }
+    }
+  }
+  // 2. Gestion du puck
+  let puckHolder = getPuckHolder();
+  if(puckHolder) {
+    state.puck.y = puckHolder.y;
+    state.puck.x = puckHolder.x;
+    for(let u of getAllUnits()) u.hasPuck = (u.id===puckHolder.id);
+  } else {
+    let u = getAllUnits().find(u=>u.y===state.puck.y&&u.x===state.puck.x);
+    if(u) {
+      u.hasPuck=true; state.puck.heldBy=u.id;
+      state.msg = `${u.team==="blue"?"🔵":"🔴"} ${u.acronym} prend le puck libre`;
+    }
+  }
+  // 3. Gestion souffle
+  for(let u of allUnits) {
+    if(u.underwater) {
+      u.breath--;
+      if(u.breath<=0) { u.underwater=false; u.breath=0; }
+    } else {
+      u.breath = Math.min(u.breath+u.stats.recovery,u.stats.maxBreath);
+    }
+    if(u.breath===0&&!u.underwater) u.breath=1;
+  }
+  // 4. Vérifier but
+  let goalTiles = puckHolder && puckHolder.team===TEAM_BLUE?GOAL_RED:GOAL_BLUE;
+  if(puckHolder && goalTiles.some(t=>t.y===puckHolder.y&&t.x===puckHolder.x)) {
+    let team = puckHolder.team;
+    state.score[team]++;
+    state.msg = `But pour ${team==="blue"?"🔵 Blue":"🔴 Red"} !`;
+    if(state.score[team]>=3) {
+      state.winner = team;
+      state.msg += ` ${team==="blue"?"🔵 Blue":"🔴 Red"} gagne la partie !`;
+    }
+    resetPositions();
+    return;
+  }
+  // 5. Tour suivant
+  state.turn++;
+}
+/* --- Correction : resetPositions respecte le placement initial --- */
+function resetPositions() {
+  state.blue = makeTeam(TEAM_BLUE);
+  state.red = makeTeam(TEAM_RED);
+  state.puck = {y:CENTER.y, x:CENTER.x, heldBy:null};
+  for(let u of getAllUnits()) u.hasPuck=false;
+}
+/* --- Correction : canvas responsive --- */
+function resizeCanvas() {
+  let w = Math.min(window.innerWidth-420, 1200);
+  let h = Math.min(window.innerHeight-40, 900);
+  canvas.width = w;
+  canvas.height = h;
+}
+window.addEventListener("resize",()=>{
+  resizeCanvas();
+  render(); // Remplacez mainLoop() par render()
+});
+resizeCanvas();
+</script>
+</body>
+</html>

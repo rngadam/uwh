@@ -2,22 +2,21 @@
 
 ## Game area
 
-
 * tiles are hexagon
 * grid layed out so that the blue team is at the top and the red team at the bottom
 * blue vs red teams
-* 3 tiles at the top, center are the goal for the blue team
-* 3 tiles at the bottom, center are the goal for the red team
+* 3 tiles row 1 column 7,8,9 are colored blue as the goal defended by blue team
+* 3 tiles row 25 column 7,8,9 colored red as the goal for the red team
 
 ## Teams
 
 * each team (blue and red) has 6 units each numbered 1 to 6 and named as follow:
-  * 1: left forward
-  * 2: center forward
-  * 3: right forward
-  * 4: left back
-  * 5: center back
-  * 6: right back
+  * 1: left forward (LF)
+  * 2: center forward (CF)
+  * 3: right forward (RF)
+  * 4: left back (LB)
+  * 5: center back (CB)
+  * 6: right back (RB)
 
 ## starting positions layout
 
@@ -63,7 +62,7 @@ Read team units (and their goal) are all on row 25.
 
 Both teams center forwards are lined up on column 8.
 
-## Units
+## Units (players and puck)
 
 * each unit has stats (generated randomly)
   * recovery: units of time per turn that the unit recovers at the surface (1 to 5)
@@ -73,7 +72,7 @@ Both teams center forwards are lined up on column 8.
   * flick distance: number of tiles a player can flick the puck (1 to 3)
   * turn speed: fraction of a turn to orient themselves (1/3, 2/3, 3/3)
 
-## Unit state
+## Players state
 
 * unit state
   * surface: this increases the player breath counter by +1 for each turn
@@ -162,4 +161,39 @@ visually show what the next action is planned for each unit using arrows (from u
 
 add a legend explaining what each arrow and its color means.
 
-shade the units depending on wheter they are at the surface (dark color), or bottom (light color)
+shade the units depending on wheter they are at the surface (dark color), or bottom (light color).
+
+## implementation
+
+apply restrictions on unit overlapping, crossing on the same plane and planning.
+replace naming of unit with the acronym (LF, CF, RF, LB, CB, RB).
+add counter for breath hold for each unit (incrementing at surface and decrementing at the bottom)
+
+keep lines of forwards and backs in correct relative position to each other:
+
+* LF is generally left of CF, RF is generally right of CF
+* LB is behind LF and left of CB. RB is generally right of CB and behind CF.
+
+at kick off, LF, CF and RF generally dive and move for the puck
+
+whoever gets the puck first then tries to move away from opposing players with the puck. once breath is low, they try to make a pass to their teammate.
+
+Have an indicator of who has the puck.
+
+Display message when a player takes possession of a free puck or steals it from another player.
+
+indicates arrow of next planned position to visualize plan with source is the side of the hexagon tile and destination is the center of the hexagon tile destination.
+
+same teammates should not steal the puck from each other.
+
+have a table of units for each team with a current status.
+
+resize playing area to display fully in the display width.
+
+once the kickoff is completed, both teams align themselves on whichever player has the puck.
+
+if a player on their own team has the puck, the units move to place themselves relative to the player who has the puck (see: "keep lines of forwards and backs in correct relative position to each other:")
+
+the pointy bit of the arrow should point in the direction the player is planning to go.
+
+to simplify visualization, lets make it that no players can end up in the same tile as other players.
