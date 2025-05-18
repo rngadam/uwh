@@ -370,11 +370,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (puck.row === 1 && puck.col >= 7 && puck.col <= 9) {
       score.red++;
+      // Trouver le buteur (porteur du puck juste avant le but)
+      let scorer = puck.possessedBy;
+      if (scorer && scorer.team === 'red') {
+        window.lastGoalScorer = { team: scorer.team, name: scorer.name, idx: scorer.idx };
+      } else {
+        window.lastGoalScorer = null;
+      }
       showMessage("Goal for Red!");
       units = getInitialUnits();
       puck = { row: 13, col: 8, possessedBy: null };
     } else if (puck.row === 25 && puck.col >= 7 && puck.col <= 9) {
       score.blue++;
+      // Trouver le buteur (porteur du puck juste avant le but)
+      let scorer = puck.possessedBy;
+      if (scorer && scorer.team === 'blue') {
+        window.lastGoalScorer = { team: scorer.team, name: scorer.name, idx: scorer.idx };
+      } else {
+        window.lastGoalScorer = null;
+      }
       showMessage("Goal for Blue!");
       units = getInitialUnits();
       puck = { row: 13, col: 8, possessedBy: null };

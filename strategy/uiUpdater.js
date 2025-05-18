@@ -2,6 +2,9 @@
 let messageHistory = [];
 let lastTurnForHistory = 1;
 
+// Historique des buts : tableau d'objets {turn, team, playerName, playerIdx}
+let goalsHistory = [];
+
 function showMessage(msg) {
   const el = document.getElementById('message');
   el.textContent = msg;
@@ -12,8 +15,25 @@ function showMessage(msg) {
   messageHistory.unshift(`<b>Turn ${turnNum}</b> : ${msg}`);
   if(messageHistory.length > 12) messageHistory.length = 12;
   updateHistory();
+  // Détection d'un but marqué (message contient "but" ou "goal")
+  if (/\b(but|goal)\b/i.test(msg) && typeof window.lastGoalScorer === 'object' && window.lastGoalScorer) {
+    // lastGoalScorer = {team, name, idx}
+    goalsHistory.push({
+      turn: turnNum,
+      team: window.lastGoalScorer.team,
+      playerName: window.lastGoalScorer.name,
+      playerIdx: window.lastGoalScorer.idx
+    });
+    // Limiter la taille de l'historique si besoin
+    if (goalsHistory.length > 20) goalsHistory.shift();
+  }
   if(window.messageTimeout) clearTimeout(window.messageTimeout);
   window.messageTimeout = setTimeout(()=>{el.style.display='none';}, 2200);
+}
+
+// Fonction utilitaire pour afficher l'historique des buts (à utiliser dans la console ou pour debug)
+window.getGoalsHistory = function() {
+  return goalsHistory.map(g => `Tour ${g.turn} : ${g.team==='blue'?'Bleu':'Rouge'} #${g.playerIdx+1} - ${g.playerName}`).join('\n');
 }
 
 function updateHistory() {
@@ -52,7 +72,15 @@ function renderTables() {
     html += '</table>';
     return html;
   }
-  tables.innerHTML = puckPos + makeTable('blue') + makeTable('red');
+  // Ajout de l'historique des buts sous le score
+  let goalsHtml = '';
+  if (goalsHistory.length) {
+    goalsHtml = `<div id="goals-history" style="margin:10px 0 18px 0;font-size:1.05em;background:#f7f7e7;border:1px solid #e6c200;border-radius:7px;padding:8px 12px;max-width:420px;">
+      <b>Historique des buts</b><br>` +
+      goalsHistory.map(g => `Tour ${g.turn} : <span style='color:${g.team==='blue'?'#1976d2':'#d32f2f'}'>${g.team==='blue'?'Bleu':'Rouge'}</span> #${g.playerIdx+1} - ${g.playerName}`).reverse().join('<br>') +
+      `</div>`;
+  }
+  tables.innerHTML = puckPos + goalsHtml + makeTable('blue') + makeTable('red');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
