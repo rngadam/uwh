@@ -64,21 +64,42 @@ document.addEventListener('DOMContentLoaded', function() {
     return units.some(u => u.row === row && u.col === col && u.atSurface === atSurface);
   }
 
-  function findClosestFreeTile(row, col, atSurface) {
+  function findClosestFreeTile(row, col, atSurface, facingDir = null) {
     // Recherche en spirale autour de (row,col) la première tuile libre à la surface
+    // facingDir: 0=haut, 1=haut droite, 2=droite, 3=bas, 4=bas gauche, 5=gauche
+    const DIRS = [
+      {dr: -1, dc: 0},   // 0: haut
+      {dr: -1, dc: 1},   // 1: haut droite
+      {dr: 0, dc: 1},    // 2: droite
+      {dr: 1, dc: 0},    // 3: bas
+      {dr: 1, dc: -1},   // 4: bas gauche
+      {dr: 0, dc: -1},   // 5: gauche
+    ];
     let visited = new Set();
     let queue = [{row, col, dist:0}];
     while (queue.length) {
+      // Prioriser les directions selon facingDir lors de l'expansion
       let {row: r, col: c, dist} = queue.shift();
       let key = r+','+c;
       if (r < 1 || r > ROWS || c < 1 || c > COLS || visited.has(key)) continue;
       visited.add(key);
       if (!isOccupied(r, c, atSurface)) return {row: r, col: c};
-      // Ajouter les voisins
-      queue.push({row: r+1, col: c, dist: dist+1});
-      queue.push({row: r-1, col: c, dist: dist+1});
-      queue.push({row: r, col: c+1, dist: dist+1});
-      queue.push({row: r, col: c-1, dist: dist+1});
+      // Générer les voisins, en priorisant la direction de facingDir
+      let neighbors = [];
+      // Utiliser facingDir si fourni, sinon null
+      let dirToUse = typeof facingDir === "number" ? facingDir : null;
+      if (dirToUse !== null && dirToUse >= 0 && dirToUse < DIRS.length) {
+        neighbors.push(DIRS[dirToUse]);
+        for (let i = 0; i < DIRS.length; i++) {
+          if (i !== dirToUse) neighbors.push(DIRS[i]);
+        }
+      } else {
+        neighbors = DIRS.slice();
+      }
+      for (const d of neighbors) {
+        queue.push({row: r + d.dr, col: c + d.dc, dist: dist + 1});
+      }
+      // Ajouter aussi les diagonales secondaires pour la spirale complète
       queue.push({row: r+1, col: c+1, dist: dist+1});
       queue.push({row: r-1, col: c-1, dist: dist+1});
       queue.push({row: r+1, col: c-1, dist: dist+1});
@@ -196,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // S'il n'a plus de souffle, il doit remonter
         if (u.breath === 0) {
           // Chercher la case la plus proche à la surface non occupée
-          let surfTile = findClosestFreeTile(u.row, u.col, true);
+            let surfTile = findClosestFreeTile(u.row, u.col, true, u.facing);
           u.planned = { action: 'surface', to: surfTile, dir: u.facing };
         } else {
           // Sinon, il se rapproche du puck
@@ -298,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (u.planned.action === 'surface') {
         // Trouver la case cible la plus proche à la surface non occupée
-        let surfTile = findClosestFreeTile(u.row, u.col, true);
+        let surfTile = findClosestFreeTile(u.row, u.col, u.facing);
         // Si la case cible est différente, on y va
         if (!isOccupied(surfTile.row, surfTile.col, true)) {
           u.row = surfTile.row;
