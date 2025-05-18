@@ -11,9 +11,10 @@
       align-items: flex-start;
       width: 100vw;
       height: 100vh;
-      max-width: none;
+      max-width: 100vw; /* Fix: prevent overflow on the right */
       margin: 0;
       box-sizing: border-box;
+      overflow-x: hidden; /* Prevent horizontal scroll */
     }
     #left-panel {
       display: flex;
@@ -204,7 +205,7 @@ function hexToPixel(row, col) {
   return {x, y};
 }
 
-function drawHex(x, y, color, fill=true) {
+function drawHex(x, y, color, fill=true, alpha=0.13) {
   ctx.save();
   ctx.beginPath();
   for(let i=0;i<6;i++) {
@@ -216,7 +217,7 @@ function drawHex(x, y, color, fill=true) {
   ctx.closePath();
   if(fill) {
     ctx.fillStyle = color;
-    ctx.globalAlpha = 0.13;
+    ctx.globalAlpha = alpha;
     ctx.fill();
     ctx.globalAlpha = 1;
   }
@@ -228,14 +229,46 @@ function drawHex(x, y, color, fill=true) {
 
 function drawBoard() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  // Grid
+  // Draw grid
   for(let r=1;r<=ROWS;r++) for(let c=1;c<=COLS;c++) {
-    drawHex(...Object.values(hexToPixel(r,c)), '#1976d2');
-  }
-  // Goal zones
-  for(let c=7;c<=9;c++) {
-    drawHex(...Object.values(hexToPixel(1,c)), '#1976d2', false);
-    drawHex(...Object.values(hexToPixel(25,c)), '#d32f2f', false);
+    // Draw goal tiles with correct color
+    if (r === 1 && c >= 7 && c <= 9) {
+      // Blue goal: solid fill (opaque) and border
+      drawHex(...Object.values(hexToPixel(r,c)), '#1976d2', true, 0.55);
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#1976d2';
+      ctx.beginPath();
+      for(let i=0;i<6;i++) {
+        const angle = Math.PI/3 * i - Math.PI/6;
+        const px = hexToPixel(r,c).x + HEX_SIZE * Math.cos(angle);
+        const py = hexToPixel(r,c).y + HEX_SIZE * Math.sin(angle);
+        if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    } else if (r === 25 && c >= 7 && c <= 9) {
+      // Red goal: solid fill (opaque) and border
+      drawHex(...Object.values(hexToPixel(r,c)), '#d32f2f', true, 0.55);
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#d32f2f';
+      ctx.beginPath();
+      for(let i=0;i<6;i++) {
+        const angle = Math.PI/3 * i - Math.PI/6;
+        const px = hexToPixel(r,c).x + HEX_SIZE * Math.cos(angle);
+        const py = hexToPixel(r,c).y + HEX_SIZE * Math.sin(angle);
+        if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      drawHex(...Object.values(hexToPixel(r,c)), '#1976d2');
+    }
   }
 }
 
@@ -410,6 +443,12 @@ function updateHistory() {
 // --- Status tables ---
 function renderTables() {
   const tables = document.getElementById('tables');
+  // Fix: ensure tables are always visible and not hidden by main area
+  tables.style.position = "relative";
+  tables.style.zIndex = "10";
+  tables.style.background = "#fff";
+  tables.style.maxWidth = "320px";
+  tables.style.overflowX = "auto";
   let puckPos = `<div style="margin-bottom:8px;font-size:1.05em;"><b>Puck</b>: ${puck.row},${puck.col} ${puck.possessedBy ? `(${puck.possessedBy.team==='blue'?'Blue':'Red'} ${puck.possessedBy.name})` : '(free)'}</div>`;
   function makeTable(team) {
     let html = `<table border="1">
