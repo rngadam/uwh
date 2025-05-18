@@ -330,13 +330,13 @@ document.addEventListener('DOMContentLoaded', function() {
       puck.col = puck.possessedBy.col;
     }
     if (puck.row === 1 && puck.col >= 7 && puck.col <= 9) {
-      score.blue++;
-      showMessage("Goal for Blue!");
+      score.red++;
+      showMessage("Goal for Red!");
       units = getInitialUnits();
       puck = { row: 13, col: 8, possessedBy: null };
     } else if (puck.row === 25 && puck.col >= 7 && puck.col <= 9) {
-      score.red++;
-      showMessage("Goal for Red!");
+      score.blue++;
+      showMessage("Goal for Blue!");
       units = getInitialUnits();
       puck = { row: 13, col: 8, possessedBy: null };
     }
