@@ -1,11 +1,15 @@
 // uiUpdater.js
 let messageHistory = [];
+let lastTurnForHistory = 1;
 
 function showMessage(msg) {
   const el = document.getElementById('message');
   el.textContent = msg;
   el.style.display = 'block';
-  messageHistory.unshift(msg);
+  // Ajout du numéro de tour dans l'historique
+  let turnNum = (typeof window.turn !== 'undefined') ? window.turn : lastTurnForHistory;
+  lastTurnForHistory = turnNum;
+  messageHistory.unshift(`<b>Turn ${turnNum}</b> : ${msg}`);
   if(messageHistory.length > 12) messageHistory.length = 12;
   updateHistory();
   if(window.messageTimeout) clearTimeout(window.messageTimeout);

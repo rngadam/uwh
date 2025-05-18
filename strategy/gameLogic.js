@@ -1,5 +1,6 @@
 // gameLogic.js
 let canvas, ctx;
+let autoplayInterval = null;
 
 function render() {
   drawBoard();
@@ -20,8 +21,24 @@ function initGame() {
   render();
 }
 
+
 document.addEventListener('DOMContentLoaded', function() {
   initGame();
+
+  // --- Autoplay ---
+  function toggleAutoplay() {
+    const btn = document.getElementById('next-btn');
+    if (autoplayInterval) {
+      clearInterval(autoplayInterval);
+      autoplayInterval = null;
+      btn.textContent = 'Next round';
+    } else {
+      autoplayInterval = setInterval(() => {
+        nextTurn();
+      }, 1000);
+      btn.textContent = 'Pause';
+    }
+  }
 
   // --- Nouvelle logique de planification et de résolution d'un tour ---
   function isOccupied(row, col, atSurface) {
@@ -201,12 +218,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     turn++;
+    window.turn = turn;
     document.getElementById('score-blue').textContent = score.blue;
     document.getElementById('score-red').textContent = score.red;
     document.getElementById('turn-num').textContent = turn;
     render();
   }
 
-  document.getElementById('next-btn').onclick = nextTurn;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.onclick = function() {
+    if (autoplayInterval) {
+      toggleAutoplay();
+    } else {
+      nextTurn();
+    }
+  };
+
+  // Double-clic ou clic droit sur le bouton = toggle autoplay
+  nextBtn.addEventListener('contextmenu', function(e) { e.preventDefault(); toggleAutoplay(); });
+  nextBtn.addEventListener('dblclick', function(e) { e.preventDefault(); toggleAutoplay(); });
+
+  // Espace = next ou toggle autoplay
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space') {
+      if (autoplayInterval) {
+        toggleAutoplay();
+      } else {
+        nextTurn();
+      }
+      e.preventDefault();
+    }
+  });
 
 });
