@@ -2,7 +2,7 @@
 
 ## Game area
 
-* 25 tiles height and 15 tiles width
+
 * tiles are hexagon
 * grid layed out so that the blue team is at the top and the red team at the bottom
 * blue vs red teams
@@ -19,42 +19,49 @@
   * 5: center back
   * 6: right back
 
-## starting positions
+## starting positions layout
 
+* 25 tiles height (y-axis, rows) and 15 tiles width (x-axis, columns)
+* coordinate y=13,x=8 is center of the pool (where the puck is initially position)
 * at the start, the players are layed out as follows:
 
-             1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
-          0 _________________________________
-          1 |        6 5 3 2 1 4            |
-          2 |                               |
-          3 |                               |
-          4 |                               |
-          5 |                               |
-          6 |                               |
-          7 |                               |
-          8 |                               |
-          9 |                               |
-         10 |                               |
-         11 |                               |
-         12 |                               |
-         13 |                               |
-         14 |                               |
-         15 |                               |
-         16 |                               |
-         17 |                               |
-         18 |                               |
-         19 |                               |
-         20 |                               |
-         21 |                               |
-         22 |                               |
-         23 |                               |
-         24 |                               |
-         25 |                               |
-         26 |         4 1 2 3 5 6           |
-            _________________________________
+             1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+        0  _______________________________
+        1 |        6 5 3 2 1 4            |
+        2 |                               |
+        3 |                               |
+        4 |                               |
+        5 |                               |
+        6 |                               |
+        7 |                               |
+        8 |                               |
+        9 |                               |
+       10 |                               |
+       11 |                               |
+       12 |                               |
+       13 |              o                |
+       14 |                               |
+       15 |                               |
+       16 |                               |
+       17 |                               |
+       18 |                               |
+       19 |                               |
+       20 |                               |
+       21 |                               |
+       22 |                               |
+       23 |                               |
+       24 |                               |
+       25 |          4 1 2 3 5 6          |
+           _______________________________
 
 
-forwards are lined up on top of the goal and backs on both sides, facing the opponent goal
+forwards for both team are lined up on over the goal and backs on both side of the forwards, facing the opponent goal.
+
+Blue team units (and their goal) are all on row 1.
+
+Read team units (and their goal) are all on row 25.
+
+Both teams center forwards are lined up on column 8.
 
 ## Units
 
@@ -108,24 +115,35 @@ each turn, both team units can plan to do one of the following action:
 * rotate
 * surface (if underwater)
 * dive (if at the surface)
+
+If underwater, they can possess the puck.
+
+If underwater with the puck and they surface, the puck becomes a free puck
+
 * flick (if in possession of the puck)
 * steal puck
 
 Once next round is initiated, all pieces execute the plan move
 
+Multiple units cannot plan to arrive in the same destination tile.
+
+Once a unit plans to arrive in a tile, other units cannot go to that tile
+
+Units should not cross paths if they are in the same plane (surface or underwater); meaning their arrow head and arrow line should not overlap another arrow head and arrow line of their team player.
+
 ## AI players
 
-AI controls all players, both blue and red players except for a single unit selected by the human player.
+AI controls all players, both blue and red players.
 
 Each turn, AI plans the move for all units in both team.
 
-Once the human player has planned the move for the unit it controls, the next turn proceeds.
+Once the moves are planned, human can press the next button or space to execute the round.
 
 ## heuristics
 
 * both team generally move towards the puck
-* once a team has possession, passes smartly to its team player by flicking
-* players alternate surface and underwater position
+* once a player am has possession, passes smartly to its teammates by flicking
+* players alternate surface and underwater position to manage their breath
 
 ## victory condition
 
@@ -142,4 +160,6 @@ have an hovercard that displays unit stats when hovering over it
 
 visually show what the next action is planned for each unit using arrows (from unit to target) and colors
 
-add a legend explaining what each arrow and its color means
+add a legend explaining what each arrow and its color means.
+
+shade the units depending on wheter they are at the surface (dark color), or bottom (light color)
