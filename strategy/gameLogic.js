@@ -135,8 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (flicked) continue;
 
-        // 2. Mouvement latéral/diagonal sans revenir sur une case récemment visitée, privilégier la direction initiale
-        if (typeof u.lastMoveDir !== 'number') u.lastMoveDir = null;
+        // 2. Mouvement : si aucun adversaire entre le porteur et le but, priorité à avancer vers le but
         const directions = [
           {dr: 0, dc: 1},   // droite
           {dr: 0, dc: -1},  // gauche
@@ -145,37 +144,84 @@ document.addEventListener('DOMContentLoaded', function() {
           {dr: -1, dc: 1},  // haut droite
           {dr: -1, dc: -1}  // haut gauche
         ];
-        // On essaye d'abord de continuer dans la même direction si possible
         let foundMove = false;
-        let moveDirs;
-        if (u.lastMoveDir !== null && u.lastMoveDir >= 0 && u.lastMoveDir < directions.length) {
-          moveDirs = [u.lastMoveDir, ...directions.map((_,i)=>i).filter(i=>i!==u.lastMoveDir)];
-        } else {
-          moveDirs = directions.map((_,i)=>i);
-        }
-        for (const dirIdx of moveDirs) {
-          const dir = directions[dirIdx];
-          let nr = u.row + dir.dr, nc = u.col + dir.dc;
-          if (nr < 1 || nr > 25 || nc < 1 || nc > 15) continue;
+        // Détermination du but adverse
+        let goalRow = (u.team === 'blue') ? 25 : 1;
+        let goalCols = [7,8,9];
+        // Chercher la colonne de but la plus proche
+        let bestGoalCol = goalCols.reduce((best, c) => (Math.abs(u.col - c) < Math.abs(u.col - best) ? c : best), goalCols[0]);
+        // Calcul du chemin en ligne droite (DDA)
+        let steps = Math.abs(goalRow - u.row);
+        let dr = (goalRow > u.row) ? 1 : -1;
+        let dc = (bestGoalCol > u.col) ? 1 : (bestGoalCol < u.col ? -1 : 0);
+        let pathClear = true;
+        let r = u.row, c = u.col;
+        for (let i = 1; i <= steps; i++) {
+          r += dr;
+          c += dc;
+          if (r < 1 || r > 25 || c < 1 || c > 15) { pathClear = false; break; }
           // Interdire d'entrer dans sa propre zone de but
-          if (
-            (u.team === 'blue' && nr === 1 && nc >= 7 && nc <= 9) ||
-            (u.team === 'red' && nr === 25 && nc >= 7 && nc <= 9)
-          ) {
-            continue;
+          if ((u.team === 'blue' && r === 1 && c >= 7 && c <= 9) || (u.team === 'red' && r === 25 && c >= 7 && c <= 9)) {
+            pathClear = false; break;
           }
-          // Pas d'adversaire sur la case
-          let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
-          let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
-          // On évite de revenir sur la case précédente
-          if (u.prevRow === nr && u.prevCol === nc) continue;
-          if (!hasOpponent && !occupied) {
-            u.planned = { action: 'move', to: { row: nr, col: nc }, dir: u.facing };
-            u.lastMoveDir = dirIdx;
-            u.prevRow = u.row;
-            u.prevCol = u.col;
-            foundMove = true;
-            break;
+          // Adversaire sur le chemin ?
+          if (units.some(op => op.team !== u.team && op.row === r && op.col === c && !op.atSurface)) {
+            pathClear = false; break;
+          }
+        }
+        // Vérifier souffle suffisant pour atteindre le but
+        let breathNeeded = steps; // 1 case = 1 souffle
+        let canReach = (u.breath >= breathNeeded);
+        if (pathClear && canReach) {
+          // Avancer d'une case vers le but (ligne droite)
+          let nr = u.row + dr, nc = u.col + dc;
+          if (nr >= 1 && nr <= 25 && nc >= 1 && nc <= 15 &&
+              !((u.team === 'blue' && nr === 1 && nc >= 7 && nc <= 9) ||
+                (u.team === 'red' && nr === 25 && nc >= 7 && nc <= 9))) {
+            let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
+            let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
+            if (!hasOpponent && !occupied) {
+              u.planned = { action: 'move', to: { row: nr, col: nc }, dir: u.facing };
+              u.lastMoveDir = null;
+              u.prevRow = u.row;
+              u.prevCol = u.col;
+              foundMove = true;
+            }
+          }
+        }
+        if (!foundMove) {
+          // Sinon, comportement habituel (direction préférée)
+          if (typeof u.lastMoveDir !== 'number') u.lastMoveDir = null;
+          let moveDirs;
+          if (u.lastMoveDir !== null && u.lastMoveDir >= 0 && u.lastMoveDir < directions.length) {
+            moveDirs = [u.lastMoveDir, ...directions.map((_,i)=>i).filter(i=>i!==u.lastMoveDir)];
+          } else {
+            moveDirs = directions.map((_,i)=>i);
+          }
+          for (const dirIdx of moveDirs) {
+            const dir = directions[dirIdx];
+            let nr = u.row + dir.dr, nc = u.col + dir.dc;
+            if (nr < 1 || nr > 25 || nc < 1 || nc > 15) continue;
+            // Interdire d'entrer dans sa propre zone de but
+            if (
+              (u.team === 'blue' && nr === 1 && nc >= 7 && nc <= 9) ||
+              (u.team === 'red' && nr === 25 && nc >= 7 && nc <= 9)
+            ) {
+              continue;
+            }
+            // Pas d'adversaire sur la case
+            let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
+            let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
+            // On évite de revenir sur la case précédente
+            if (u.prevRow === nr && u.prevCol === nc) continue;
+            if (!hasOpponent && !occupied) {
+              u.planned = { action: 'move', to: { row: nr, col: nc }, dir: u.facing };
+              u.lastMoveDir = dirIdx;
+              u.prevRow = u.row;
+              u.prevCol = u.col;
+              foundMove = true;
+              break;
+            }
           }
         }
         if (foundMove) continue;
