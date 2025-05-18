@@ -139,3 +139,13 @@ three columns:
 - Plans are resolved with random draw in case of destination conflicts.
 - Units cannot have negative breath.
 - Initial placements and AI logic must follow the grid and rules above.
+
+## Heuristics
+
+At kickoff, backs (LB, CB, RB) now follow their respective forwards at a 2-tile distance, but always stay within the grid boundaries.
+After kickoff, all units (except the puck holder) maintain a formation relative to the puck holder, using role-based offsets, and always stay within the grid.
+The puck holder's movement strategy is now context-aware:
+In their own third, they move toward the wall (side) and then forward.
+In the middle third, they move diagonally toward the less crowded side (away from opponents).
+In the opponent's third, they attempt a diagonal toward the goal if unblocked, or swing toward the opposite corner.
+All movement logic ensures units do not move outside the grid boundaries.

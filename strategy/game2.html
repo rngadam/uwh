@@ -480,6 +480,9 @@ function render() {
   renderTables();
 }
 
+// Render initial state immediately after setup
+render();
+
 // --- Turn logic (AI + rules) ---
 document.getElementById('next-btn').onclick = function() {
   // --- AI planning and resolution according to specification ---
