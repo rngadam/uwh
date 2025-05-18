@@ -262,6 +262,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // On prépare des maps pour vérifier les occupations
     let surfaceMap = {};
     let bottomMap = {};
+    // --- Résolution des passes (flicks) avant les mouvements ---
+    for (const u of units) {
+      if (u.planned.action === 'flick') {
+        // Trouver le destinataire sur la case cible
+        let mate = units.find(m => m.team === u.team && m.row === u.planned.to.row && m.col === u.planned.to.col && !m.atSurface);
+        if (mate && puck.possessedBy === u) {
+          puck.possessedBy = mate;
+          showMessage(`${u.team === 'blue' ? 'Blue' : 'Red'} ${u.name} passes the puck to ${mate.name}`);
+        }
+      }
+    }
+
     for (const u of units) {
       // Gestion des mouvements
       if (u.planned.action === 'move') {
