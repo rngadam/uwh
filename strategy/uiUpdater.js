@@ -76,31 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (tile) {
       // Chercher une unité sur cette tuile
-      foundUnit = units.find(u => u.row === tile.row && u.col === tile.col);
-      // Afficher dans le panneau de droite
-      const infoDiv = document.getElementById('tile-info');
-      let html = `<b>Position :</b> ${tile.row}, ${tile.col}`;
-      if (foundUnit) {
-        html += `<br><b>Unité :</b> ${foundUnit.team === 'blue' ? 'Bleu' : 'Rouge'} #${foundUnit.idx+1} - ${foundUnit.name}`;
-        html += `<br><b>Recovery :</b> ${foundUnit.stats.recovery}`;
-        html += `<br><b>Max breath :</b> ${foundUnit.stats.maxHold}`;
-        html += `<br><b>Swim speed :</b> ${foundUnit.stats.swim}`;
-        html += `<br><b>Steal :</b> ${Math.round(foundUnit.stats.steal*100)}%`;
-        html += `<br><b>Flick :</b> ${foundUnit.stats.flick}`;
-        html += `<br><b>Turn speed :</b> ${foundUnit.stats.turn}`;
-        html += `<br><b>State :</b> ${foundUnit.atSurface ? 'Surface' : 'Bottom'}`;
-        html += `<br><b>Breath :</b> ${foundUnit.breath}`;
-      } else {
-        html += `<br><i>Aucune unité sur cette tuile</i>`;
-      }
-      // Puck ?
-      if (puck.row === tile.row && puck.col === tile.col) {
-        html += `<br><b>Puck présent</b>`;
-        if (puck.possessedBy) {
-          html += ` (tenu par ${puck.possessedBy.team === 'blue' ? 'Bleu' : 'Rouge'} ${puck.possessedBy.name})`;
-        }
-      }
-      infoDiv.innerHTML = html;
+      displayTileInfo(foundUnit, tile);
     } else {
       // Si pas de tuile trouvée, efface l'info
       document.getElementById('tile-info').innerHTML = '';
@@ -110,3 +86,31 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('tile-info').innerHTML = '';
   });
 });
+
+function displayTileInfo(foundUnit, tile) {
+  foundUnit = units.find(u => u.row === tile.row && u.col === tile.col);
+  // Afficher dans le panneau de droite
+  const infoDiv = document.getElementById('tile-info');
+  let html = `<b>Position :</b> ${tile.row}, ${tile.col}`;
+  if (foundUnit) {
+    html += `<br><b>Unité :</b> ${foundUnit.team === 'blue' ? 'Bleu' : 'Rouge'} #${foundUnit.idx + 1} - ${foundUnit.name}`;
+    html += `<br><b>Recovery :</b> ${foundUnit.stats.recovery}`;
+    html += `<br><b>Max breath :</b> ${foundUnit.stats.maxHold}`;
+    html += `<br><b>Swim speed :</b> ${foundUnit.stats.swim}`;
+    html += `<br><b>Steal :</b> ${Math.round(foundUnit.stats.steal * 100)}%`;
+    html += `<br><b>Flick :</b> ${foundUnit.stats.flick}`;
+    html += `<br><b>Turn speed :</b> ${foundUnit.stats.turn}`;
+    html += `<br><b>State :</b> ${foundUnit.atSurface ? 'Surface' : 'Bottom'}`;
+    html += `<br><b>Breath :</b> ${foundUnit.breath}`;
+  } else {
+    html += `<br><i>Aucune unité sur cette tuile</i>`;
+  }
+  // Puck ?
+  if (puck.row === tile.row && puck.col === tile.col) {
+    html += `<br><b>Puck présent</b>`;
+    if (puck.possessedBy) {
+      html += ` (tenu par ${puck.possessedBy.team === 'blue' ? 'Bleu' : 'Rouge'} ${puck.possessedBy.name})`;
+    }
+  }
+  infoDiv.innerHTML = html;
+}
