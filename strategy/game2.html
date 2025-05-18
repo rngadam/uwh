@@ -148,6 +148,11 @@
     <div id="message" style="position:absolute;left:10px;top:10px;z-index:20;font-size:1.1em;color:#222;background:#fffbe7;border:1px solid #e6c200;padding:8px 18px;border-radius:8px;display:none;box-shadow:2px 2px 8px #e6c200;"></div>
   </div>
   <div id="right-panel">
+    <div style="margin-bottom:12px;">
+      <label for="speed-slider"><b>Vitesse du tour</b> :</label>
+      <input type="range" id="speed-slider" min="2" max="30" value="10" step="1" style="vertical-align:middle;">
+      <span id="speed-label">1.0s</span>
+    </div>
     <button id="next-btn">Next round</button>
     <div id="tile-info" style="margin:12px 0 18px 0;min-height:80px;font-size:1.05em;"></div>
     <div id="history"></div>

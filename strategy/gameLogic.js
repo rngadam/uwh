@@ -1,6 +1,7 @@
 // gameLogic.js
 let canvas, ctx;
 let autoplayInterval = null;
+let autoplayDelay = 1000; // ms, par défaut 1s
 
 function render() {
   drawBoard();
@@ -35,9 +36,27 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       autoplayInterval = setInterval(() => {
         nextTurn();
-      }, 1000);
+      }, autoplayDelay);
       btn.textContent = 'Pause';
     }
+  }
+
+  // Slider de vitesse
+  const speedSlider = document.getElementById('speed-slider');
+  const speedLabel = document.getElementById('speed-label');
+  function updateSpeedLabel(val) {
+    speedLabel.textContent = (val/10).toFixed(1) + 's';
+  }
+  if (speedSlider) {
+    updateSpeedLabel(speedSlider.value);
+    speedSlider.addEventListener('input', function() {
+      autoplayDelay = Number(speedSlider.value) * 100;
+      updateSpeedLabel(speedSlider.value);
+      if (autoplayInterval) {
+        clearInterval(autoplayInterval);
+        autoplayInterval = setInterval(() => { nextTurn(); }, autoplayDelay);
+      }
+    });
   }
 
   // --- Nouvelle logique de planification et de résolution d'un tour ---
