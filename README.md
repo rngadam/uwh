@@ -1,82 +1,212 @@
-# Simplified 2D Underwater Hockey Browser Simulator Specification
+# Turn-based Strategy game UWH
 
-This document outlines a simplified specification for a 2D browser-based simulation of Underwater Hockey (UWH). The aim is to capture the core mechanics and rules of the sport in a basic, accessible format.
+## Game area
 
-## 1. Introduction
+* tiles are hexagon
+* grid layed out so that the blue team is at the top and the red team at the bottom
+* blue vs red teams
+* 3 tiles row 1 column 7,8,9 are colored blue as the goal defended by blue team
+* 3 tiles row 25 column 7,8,9 colored red as the goal for the red team
 
-This specification describes a simplified, 2D representation of an Underwater Hockey game intended for implementation in a web browser. It focuses on the essential elements of UWH gameplay, environment, and player interaction within a two-dimensional plane, abstracting away complex 3D physics and physiological modeling for a basic simulation.
+## Teams
 
-## 2. Gameplay Mechanics
+* each team (blue and red) has 6 units each numbered 1 to 6 and named as follow:
+  * 1: left forward (LF)
+  * 2: center forward (CF)
+  * 3: right forward (RF)
+  * 4: left back (LB)
+  * 5: center back (CB)
+  * 6: right back (RB)
 
-The simulation will represent a basic UWH match between two teams in a 2D top-down view.
+## starting positions layout
 
-* **Objective:** Score by maneuvering the puck into the opponent's goal trough using player sticks[cite: 8]. The team with the most goals at the end of the game wins[cite: 8].
-* **Duration:** The game consists of two halves. The duration of each half will be a configurable parameter (e.g., a simplified time like 5 minutes per half)[cite: 2].
-* **Scoring:** A goal is scored when the puck completely enters the designated goal area at the opponent's end[cite: 73]. The simulation must detect this using 2D collision geometry.
-* **Game Start/Restart:** Play begins with the puck at the center of the playing area. Players start at their respective end lines[cite: 74]. Restarts after a goal follow a similar procedure[cite: 75].
-* **Teams:** Two teams (e.g., Black/Blue and White) will compete, each with a fixed number of players on the field (e.g., 6 per team)[cite: 1]. Basic player identification (team color) will be present[cite: 79]. Substitution rules will be simplified or omitted for this basic 2D version.
-* **Fouls and Penalties:** A simplified system for detecting basic fouls (e.g., illegal puck contact, obstruction) and applying simple consequences (e.g., stopping play, awarding possession) will be included. Time penalties and penalty shots will be omitted for this simplified version.
+* 25 tiles height (y-axis, rows) and 15 tiles width (x-axis, columns)
+* coordinate y=13,x=8 is center of the pool (where the puck is initially position)
+* at the start, the players are layed out as follows:
 
-## 3. Environment
+             1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+        0  _______________________________
+        1 |        6 5 3 2 1 4            |
+        2 |                               |
+        3 |                               |
+        4 |                               |
+        5 |                               |
+        6 |                               |
+        7 |                               |
+        8 |                               |
+        9 |                               |
+       10 |                               |
+       11 |                               |
+       12 |                               |
+       13 |              o                |
+       14 |                               |
+       15 |                               |
+       16 |                               |
+       17 |                               |
+       18 |                               |
+       19 |                               |
+       20 |                               |
+       21 |                               |
+       22 |                               |
+       23 |                               |
+       24 |                               |
+       25 |          4 1 2 3 5 6          |
+           _______________________________
 
-The playing area will be represented as a 2D rectangle in the browser window.
 
-* **Playing Area:** A rectangular area representing the pool bottom[cite: 4]. Dimensions will be simplified and fixed (e.g., a standard aspect ratio) rather than fully configurable to CMAS ranges[cite: 34, 35].
-* **Goals:** Represented as 2D rectangles or lines at each end of the playing area[cite: 43]. The goal "trough" will be simplified to a scoring line or zone[cite: 73].
-* **Boundaries:** The edges of the 2D rectangle represent the pool walls[cite: 38, 39].
-* **Markings:** Basic 2D markings on the playing area will indicate the center spot and goal areas[cite: 39, 40].
+forwards for both team are lined up on over the goal and backs on both side of the forwards, facing the opponent goal.
 
-## 4. Equipment
+Blue team units (and their goal) are all on row 1.
 
-The essential equipment (puck and player gear) will be represented in a simplified 2D form.
+Read team units (and their goal) are all on row 25.
 
-* **Puck:** A 2D circle or disk representing the puck[cite: 46]. It will have basic physical properties relevant to 2D movement (mass, friction)[cite: 48]. Flicking (lifting the puck off the bottom) will be simplified or represented visually without complex 3D trajectory physics.
-* **Player Equipment:** Players will have visual representations of sticks (short lines or shapes attached to the player)[cite: 61]. The stick is the primary tool for interacting with the puck[cite: 63]. Fins will be implied by player movement speed rather than explicitly simulated with complex physics[cite: 59]. Masks and snorkels are visual elements but not functionally simulated in this simplified 2D version[cite: 58].
+Both teams center forwards are lined up on column 8.
 
-## 5. Player Agents
+## Units (players and puck)
 
-Player agents will be represented as 2D circles or simple sprites.
+* each unit has stats (generated randomly)
+  * recovery: units of time per turn that the unit recovers at the surface (1 to 5)
+  * max hold breath: maximum turns that the player can stay underwater (15 to 25)
+  * swim speed: tiles per turn that the player can move (1 to 3)
+  * steal strength: a probability of stealing the puck from another player (10% to 80%)
+  * flick distance: number of tiles a player can flick the puck (1 to 3)
+  * turn speed: fraction of a turn to orient themselves (1/3, 2/3, 3/3)
 
-* **Attributes:** Players will have basic attributes like speed and a simplified stamina or breath indicator that limits their ability to perform actions continuously[cite: 116, 120]. These attributes can have an element of randomization[cite: 115]. Breath-holding and surfacing for air will be a simplified mechanic (e.g., a timer that requires players to move to the "surface" edge of the 2D area periodically)[cite: 6].
-* **Movement:** Players can move within the 2D playing area. Movement speed is influenced by their speed attribute and simplified physiological state (stamina/breath)[cite: 157].
-* **Actions:** Players can perform simplified actions:
-    * **Push:** Move the puck along the 2D bottom when in contact with the stick[cite: 161].
-    * **Flick:** A simplified action to move the puck a short distance, possibly over other objects or players (visual only)[cite: 161].
-    * **Curl:** Rotate while keeping the puck close for basic possession[cite: 163].
-    * **Tackle:** Attempt to take the puck from an opponent by moving the stick into contact with the puck[cite: 167].
+## Players state
 
-## 6. Artificial Intelligence (AI)
+* unit state
+  * surface: this increases the player breath counter by +1 for each turn
+    * if the counter is at the value of the player max hold breath, the counter stops
+  * underwater: this decreases the player breath counter by -1 for each turn
+    * if the counter is at zero, the player automatically changes state to surface
+* unit direction: unit can face in any direction of the hexagon tile and can rotate (the turn speed determines how fast it can rotate)
+  * rotation is called a curl
 
-Basic AI will control player agents to simulate gameplay.
+## The puck
 
-* **Behavior:** AI agents will have simple behaviors for offense (moving towards the opponent's goal, pushing the puck) and defense (moving towards their own goal, trying to take the puck)[cite: 195, 196].
-* **Roles:** Basic positional roles (e.g., forward, back) can influence target positions[cite: 194].
-* **Resource Management:** AI will monitor the simplified breath/stamina and move the player to the surface area when needed[cite: 206, 207].
-* **Visualization of AI State:** As a key feature, the simulation will allow a toggle to display simple indicators on AI players showing their current basic state (e.g., "Attacking", "Defending", "Surfacing")[cite: 268].
+* another game piece is the puck
+* at the start of a round, the puck is placed at the center tile of the play grid
+  * a "free" puck is possessed by the player that steps on the same tile as where the puck is
+* the puck only moves when possessed by a player
 
-## 7. Physics
+## Stealing the puck
 
-A simplified 2D physics model will govern interactions.
+If player possesses the puck and an opposing player faces each other, the opponent can try to steal the puck.
 
-* **Puck Physics:** Model 2D movement with inertia, friction with the bottom, and simple drag[cite: 225, 226]. Stick interaction applies force to the puck[cite: 228].
-* **Player Physics:** Model player movement with inertia and simple drag[cite: 239, 240]. Collision detection between players, the puck, and boundaries will be handled[cite: 244].
-* **Buoyancy:** Simplified to the need for players to surface periodically for air rather than a constant force simulated in 3D.
+This has a probability of success determined by the steal probability.
 
-## 8. Visualization
+## Restrictions on movement
 
-The simulation will be rendered in a web browser using 2D graphics.
+* if two units are underwater, they cannot "jump" over each other
+* if two units are at the surface, they cannot "jump over each other
+* if one unit is a the surface and the other is underwater, they can cross or occupy the same tile
 
-* **Rendering:** Use standard web technologies (e.g., Canvas, SVG, or a 2D game library) to draw the environment, players, and puck.
-* **View:** A fixed 2D top-down view of the playing area[cite: 14].
-* **Elements:**
-    * Clearly render the playing area, goals, and markings[cite: 261].
-    * Render player agents with team colors and sticks[cite: 262].
-    * Render the puck[cite: 263].
-    * Implement the AI state visualization overlay as described in Section 6[cite: 265].
-    * Basic UI elements for score and game time[cite: 278].
+## scoring
 
-## 9. Implementation Notes
+* objective is for the blue team to take posession of the puck and bring it to one of the 3 goal tiles of the red team and vice-versa
+* once the puck is in the goal zone, score increments by 1 for the scoring team and units position reset at their starting point.
 
-* **Technology:** Implement using HTML, CSS, and JavaScript. A 2D game library might simplify rendering and physics.
-* **Simplification:** Focus on implementing the core game loop, basic physics, and simple AI behaviors. Defer complex features like full CMAS rules, detailed physiology, and advanced tactics.
-* **Modularity:** Structure the code to separate game logic, physics, AI, and rendering.
+## turn
+
+each turn, both team units can plan to do one of the following action:
+
+* move
+* rotate
+* surface (if underwater)
+* dive (if at the surface)
+
+If underwater, they can possess the puck.
+
+If underwater with the puck and they surface, the puck becomes a free puck
+
+* flick (if in possession of the puck)
+* steal puck
+
+Once next round is initiated, all pieces execute the plan move
+
+Multiple units cannot plan to arrive in the same destination tile.
+
+Once a unit plans to arrive in a tile, other units cannot go to that tile
+
+Units should not cross paths if they are in the same plane (surface or underwater); meaning their arrow head and arrow line should not overlap another arrow head and arrow line of their team player.
+
+## AI players
+
+AI controls all players, both blue and red players.
+
+Each turn, AI plans the move for all units in both team.
+
+Once the moves are planned, human can press the next button or space to execute the round.
+
+## heuristics
+
+* both team generally move towards the puck
+* once a player am has possession, passes smartly to its teammates by flicking
+* players alternate surface and underwater position to manage their breath
+
+## victory condition
+
+a game ends for the first team reaching 3 points.
+
+## user interface
+
+display:
+
+* scoreboard
+* number of turns
+
+have an hovercard that displays unit stats when hovering over it
+
+visually show what the next action is planned for each unit using arrows (from unit to target) and colors
+
+add a legend explaining what each arrow and its color means.
+
+shade the units depending on wheter they are at the surface (dark color), or bottom (light color).
+
+## implementation
+
+apply restrictions on unit overlapping, crossing on the same plane and planning.
+replace naming of unit with the acronym (LF, CF, RF, LB, CB, RB).
+add counter for breath hold for each unit (incrementing at surface and decrementing at the bottom)
+
+keep lines of forwards and backs in correct relative position to each other:
+
+* LF is generally left of CF, RF is generally right of CF
+* LB is behind LF and left of CB. RB is generally right of CB and behind CF.
+
+at kick off, LF, CF and RF generally dive and move for the puck
+
+whoever gets the puck first then tries to move away from opposing players with the puck. once breath is low, they try to make a pass to their teammate.
+
+Have an indicator of who has the puck.
+
+Display message when a player takes possession of a free puck or steals it from another player.
+
+indicates arrow of next planned position to visualize plan with source is the side of the hexagon tile and destination is the center of the hexagon tile destination.
+
+same teammates should not steal the puck from each other.
+
+have a table of units for each team with a current status.
+
+resize playing area to display fully in the display width.
+
+once the kickoff is completed, both teams align themselves on whichever player has the puck.
+
+if a player on their own team has the puck, the units move to place themselves relative to the player who has the puck (see: "keep lines of forwards and backs in correct relative position to each other:")
+
+the pointy bit of the arrow should point in the direction the player is planning to go.
+
+to simplify visualization, lets make it that no players can end up in the same tile as other players.
+
+il faut ajuster la stratégie IA puisque ce que je vois, c'est LF prendre possession de la puck, faire une passe à LB et LB s'éloigner dans le  coin ligne 1 colonne 1.
+
+problèmes:
+
+- le but est de placer la puck dans le but adverse, donc ultimement l'équipe tente de progresser vers le but rouge
+- les autres coéquipiers et les joueurs adverse ne suivent pas le porteur de puck alors qu'ils devraient. les coéquipiers pour supporter celui-ci et les adversaires pour tenter de prendre possession de la puck
+
+un joueur à la surface ne peut pas posséder le palet.
+
+ajouter au tableau ce qui est planifier pour le prochain tour
+
+ajouter un historique de messages dans la colonne à droite de l'aire de jeu.
