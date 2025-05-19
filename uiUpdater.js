@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let foundUnit = null;
     for (let r = 1; r <= ROWS; r++) {
       for (let c = 1; c <= COLS; c++) {
-        const {x, y} = hexToPixel(r, c);
+        const {x, y} = tileToPixel(r, c);
         const dist = Math.hypot(mx - x, my - y);
         if (dist < minDist && dist < HEX_SIZE) {
           minDist = dist;

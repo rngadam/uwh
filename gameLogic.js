@@ -109,6 +109,41 @@ document.addEventListener('DOMContentLoaded', function() {
     return {row, col};
   }
 
+  // Utiliser getNeighbors pour le pathfinding et la planification des mouvements
+  function pathTo(u, target, plannedTiles) {
+    let queue = [[u.row, u.col, []]], seen = {};
+    while(queue.length) {
+      let [y, x, path] = queue.shift();
+      let key = y + "," + x;
+      if(seen[key]) continue;
+      seen[key] = 1;
+      if(y === target.row && x === target.col) return [ {y: u.row, x: u.col}, ...path ];
+      for(const nb of getNeighbors(y, x)) {
+        if(nb.row < 1 || nb.row > ROWS || nb.col < 1 || nb.col > COLS) continue;
+        if(units.some(unit => unit.row === nb.row && unit.col === nb.col && unit.atSurface === u.atSurface)) continue;
+        if(plannedTiles && plannedTiles[nb.row + "," + nb.col]) continue;
+        queue.push([nb.row, nb.col, [...path, {y: nb.row, x: nb.col}]]);
+      }
+    }
+    return [ {y: u.row, x: u.col} ];
+  }
+
+  // Utiliser getNeighbors pour la planification de mouvement direct
+  function planMoveToward(u, targetRow, targetCol) {
+    let best = {row: u.row, col: u.col};
+    let minDist = Math.abs(u.row - targetRow) + Math.abs(u.col - targetCol);
+    for(const nb of getNeighbors(u.row, u.col)) {
+      if(nb.row < 1 || nb.row > ROWS || nb.col < 1 || nb.col > COLS) continue;
+      if(units.some(unit => unit.row === nb.row && unit.col === nb.col && unit.atSurface === u.atSurface)) continue;
+      let dist = Math.abs(nb.row - targetRow) + Math.abs(nb.col - targetCol);
+      if(dist < minDist) {
+        minDist = dist;
+        best = nb;
+      }
+    }
+    return best;
+  }
+
   function nextTurn() {
     // Pour chaque unité, planifier l'action
     for (const u of units) {
@@ -210,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
               continue;
             }
             // Pas d'adversaire sur la case
-            let hasOpponent = units.some(op => op.team !== u.team && op.row === nr && op.col === nc && !op.atSurface);
+            let hasOpponent = units.some(op => op.team !== u.team && op.row !== nr && op.col !== nc && !op.atSurface);
             let occupied = units.some(op => op.row === nr && op.col === nc && op.atSurface === u.atSurface);
             // On évite de revenir sur la case précédente
             if (u.prevRow === nr && u.prevCol === nc) continue;
@@ -474,3 +509,5 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
 });
+// Remplacer toutes les références à hexToPixel par tileToPixel dans ce fichier
+// Remplacer toutes les références à drawHex par drawSquare dans ce fichier
